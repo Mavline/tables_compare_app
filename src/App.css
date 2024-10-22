@@ -8,6 +8,7 @@
   justify-content: center;
   font-size: 16px;
   color: white;
+  overflow-x: hidden;
 }
 
 .App-logo {
@@ -208,4 +209,317 @@ select {
   display: flex;
   justify-content: center;
   gap: 1rem;
+}
+
+.mapping-container {
+  background-color: #3a3f4b;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.mapping-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr 2fr;
+  gap: 20px;
+}
+
+.mapping-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.mapping-column h3 {
+  margin-bottom: 10px;
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+  background-color: #3a3f4b;
+  padding: 5px 0;
+  z-index: 1;
+}
+
+.mapping-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.new-fields .mapping-row {
+  justify-content: flex-start;
+}
+
+.select-native {
+  width: 100%;
+  padding: 8px;
+  font-size: 1rem;
+  border-radius: 4px;
+  border: 1px solid #61dafb;
+  background-color: #282c34;
+  color: white;
+  cursor: pointer;
+}
+
+.select-native:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(97, 218, 251, 0.5);
+}
+
+.select-native option {
+  background-color: #282c34;
+  color: white;
+  padding: 8px;
+}
+
+/* Стили для прокрутки */
+.select-native {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.select-native::-webkit-scrollbar {
+  width: 10px;
+}
+
+.select-native::-webkit-scrollbar-track {
+  background: #282c34;
+}
+
+.select-native::-webkit-scrollbar-thumb {
+  background: #61dafb;
+  border-radius: 5px;
+}
+
+.select-native::-webkit-scrollbar-thumb:hover {
+  background: #21a1c9;
+}
+
+.custom-select {
+  position: relative;
+  width: 100%;
+}
+
+.select-trigger {
+  width: 100%;
+  padding: 8px;
+  font-size: 1rem;
+  border-radius: 4px;
+  border: 1px solid #61dafb;
+  background-color: #282c34;
+  color: white;
+  cursor: pointer;
+  text-align: left;
+}
+
+.select-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: #282c34;
+  border: 1px solid #61dafb;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  z-index: 10;
+}
+
+.select-option {
+  padding: 8px;
+  cursor: pointer;
+}
+
+.select-option:hover {
+  background-color: #3a3f4b;
+}
+
+/* Стили для прокрутки */
+.select-dropdown::-webkit-scrollbar {
+  width: 10px;
+}
+
+.select-dropdown::-webkit-scrollbar-track {
+  background: #282c34;
+}
+
+.select-dropdown::-webkit-scrollbar-thumb {
+  background: #61dafb;
+  border-radius: 5px;
+}
+
+.select-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #21a1c9;
+}
+
+/* Убираем горизонтальную прокрутку */
+.App {
+  overflow-x: hidden;
+}
+
+/* Стили для прокрутки */
+.mapping-scroll-container::-webkit-scrollbar,
+.select-dropdown::-webkit-scrollbar {
+  width: 10px;
+}
+
+.mapping-scroll-container::-webkit-scrollbar-track,
+.select-dropdown::-webkit-scrollbar-track {
+  background: #282c34;
+}
+
+.mapping-scroll-container::-webkit-scrollbar-thumb,
+.select-dropdown::-webkit-scrollbar-thumb {
+  background: #61dafb;
+  border-radius: 5px;
+}
+
+.mapping-scroll-container::-webkit-scrollbar-thumb:hover,
+.select-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #21a1c9;
+}
+
+.result-preview {
+  background-color: #3a3f4b;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+  overflow-x: auto;
+}
+
+.result-preview table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.result-preview th, .result-preview td {
+  border: 1px solid #61dafb;
+  padding: 8px;
+  text-align: left;
+}
+
+.result-preview th {
+  background-color: #4a4f5a;
+}
+
+.custom-select {
+  position: relative;
+  width: 100%;
+}
+
+.select-native {
+  width: 100%;
+  padding: 8px;
+  font-size: 1rem;
+  border-radius: 4px;
+  border: 1px solid #61dafb;
+  background-color: #282c34;
+  color: white;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+.custom-select::after {
+  content: '\25BC';
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.select-native:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(97, 218, 251, 0.5);
+}
+
+.select-native option {
+  background-color: #282c34;
+  color: white;
+  padding: 8px;
+}
+
+/* Стили для прокрутки */
+.select-native {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.select-native::-webkit-scrollbar {
+  width: 10px;
+}
+
+.select-native::-webkit-scrollbar-track {
+  background: #282c34;
+}
+
+.select-native::-webkit-scrollbar-thumb {
+  background: #61dafb;
+  border-radius: 5px;
+}
+
+.select-native::-webkit-scrollbar-thumb:hover {
+  background: #21a1c9;
+}
+
+.custom-select {
+  position: relative;
+  width: 100%;
+}
+
+.select-trigger {
+  width: 100%;
+  padding: 8px;
+  font-size: 1rem;
+  border-radius: 4px;
+  border: 1px solid #61dafb;
+  background-color: #282c34;
+  color: white;
+  cursor: pointer;
+  text-align: left;
+}
+
+.select-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: #282c34;
+  border: 1px solid #61dafb;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  z-index: 10;
+}
+
+.select-option {
+  padding: 8px;
+  cursor: pointer;
+}
+
+.select-option:hover {
+  background-color: #3a3f4b;
+}
+
+/* Стили для прокрутки */
+.select-dropdown::-webkit-scrollbar {
+  width: 10px;
+}
+
+.select-dropdown::-webkit-scrollbar-track {
+  background: #282c34;
+}
+
+.select-dropdown::-webkit-scrollbar-thumb {
+  background: #61dafb;
+  border-radius: 5px;
+}
+
+.select-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #21a1c9;
 }

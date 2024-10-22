@@ -5,28 +5,29 @@ import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver'
 import Button from "./components/ui/button"
 import Input from "./components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select"
 import './App.css';
 
 function App() {
   const [files, setFiles] = useState<File[]>([])
   const [tables, setTables] = useState<any[]>([])
   const [fields, setFields] = useState<{ [key: string]: string[] }>({})
-  const [selectedFields, setSelectedFields] = useState<{ [key: string]: string[] }>({})
-  const [keyFields, setKeyFields] = useState<{ [key: string]: string }>({})
-  const [mergedData, setMergedData] = useState<any[] | null>(null)
+  const [fieldMapping, setFieldMapping] = useState<{ [key: string]: [string, string] }>({
+    'Number': ['', ''],
+    'Description': ['', ''],
+    'Revision': ['', ''],
+    'QTY': ['', ''],
+    'Ref Des': ['', '']
+  })
+  const [comparisonResult, setComparisonResult] = useState<any[] | null>(null)
 
-  const findHeaderRow = (data: any[][]) => {
-    return data.reduce((longest: any[], current: any[]) => 
-      current.filter(Boolean).length > longest.filter(Boolean).length ? current : longest, []
-    )
-  }
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const newFiles = Array.from(event.target.files || [])
-    setFiles([...files, ...newFiles])
-
-    newFiles.forEach((file) => {
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, fileIndex: number) => {
+    const newFile = event.target.files?.[0]
+    if (newFile) {
+      setFiles(prevFiles => {
+        const newFiles = [...prevFiles]
+        newFiles[fileIndex] = newFile
+        return newFiles
+      })
       const reader = new FileReader()
       reader.onload = (e) => {
         const data = new Uint8Array(e.target?.result as ArrayBuffer)
@@ -34,172 +35,234 @@ function App() {
         const sheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[sheetName]
         
-        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1')
-        const endRow = Math.min(range.e.r, 49)
-        const tempRange = { ...range, e: { ...range.e, r: endRow } }
-        const partialJson = XLSX.utils.sheet_to_json(worksheet, { range: tempRange, header: 1 })
-
-        const headerRow = findHeaderRow(partialJson as any[][])
-        const headers = headerRow.map((header) => header?.toString() || '')
-
-        const json = XLSX.utils.sheet_to_json(worksheet, { header: headers })
-
-        setTables((prevTables) => [...prevTables, json])
-        setFields((prevFields) => ({
+        const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+        const headers = json[0] as string[]
+        const jsonData = XLSX.utils.sheet_to_json(worksheet)
+        
+        setTables(prevTables => {
+          const newTables = [...prevTables]
+          newTables[fileIndex] = jsonData
+          return newTables
+        })
+        
+        setFields(prevFields => ({
           ...prevFields,
-          [file.name]: headers,
+          [newFile.name]: headers
         }))
-        setSelectedFields((prevSelected) => ({
-          ...prevSelected,
-          [file.name]: [],
-        }))
-        setKeyFields((prevKeys) => ({
-          ...prevKeys,
-          [file.name]: '',
-        }))
+
+        console.log(`File ${fileIndex + 1} fields:`, headers)
       }
-      reader.readAsArrayBuffer(file)
-    })
+      reader.readAsArrayBuffer(newFile)
+    }
   }
 
-  const handleFieldSelection = (fileName: string, field: string) => {
-    setSelectedFields((prevFields) => {
-      const updatedFields = prevFields[fileName].includes(field)
-        ? prevFields[fileName].filter((f) => f !== field)
-        : [...prevFields[fileName], field]
-      return {
-        ...prevFields,
-        [fileName]: updatedFields,
-      }
-    })
-  }
-
-  const handleKeyFieldSelection = (fileName: string, field: string) => {
-    setKeyFields((prevKeys) => ({
-      ...prevKeys,
-      [fileName]: field,
+  const handleFieldMapping = (newTableField: string, fileIndex: number, value: string) => {
+    setFieldMapping(prevMapping => ({
+      ...prevMapping,
+      [newTableField]: [
+        fileIndex === 0 ? value : prevMapping[newTableField][0],
+        fileIndex === 1 ? value : prevMapping[newTableField][1]
+      ]
     }))
   }
 
-  const mergeTables = () => {
-    if (tables.length < 2) {
-      alert('Please upload at least two tables to merge.')
+  const compareTables = () => {
+    if (tables.length !== 2) {
+      alert('Please upload both tables before comparing.')
       return
     }
 
-    const keyFieldSet = new Set(Object.values(keyFields))
-    if (keyFieldSet.size === 0) {
-      alert('Please select at least one key field for merging.')
-      return
-    }
+    const result = tables[0].map((oldRow: any, index: number) => {
+      const newRow = tables[1][index]
+      if (!newRow) return null
 
-    let merged = tables[0]
-    
-    for (let i = 1; i < tables.length; i++) {
-      const currentKeyField = keyFields[files[i].name]
-      const previousKeyField = keyFields[files[i - 1].name]
+      let hasChanges = false
+      const resultRow: any = {
+        'Number': newRow[fieldMapping['Number'][1]],
+        'Description': newRow[fieldMapping['Description'][1]]
+      }
 
-      merged = merged.flatMap((row: any) => {
-        const matchingRows = tables[i].filter((r: any) => r[currentKeyField] === row[previousKeyField])
-        if (matchingRows.length > 0) {
-          return matchingRows.map((match: any) => ({ ...row, ...match }))
-        }
-        return [row]
-      })
-    }
+      // Сравниваем QTY
+      const qtyOld = oldRow[fieldMapping['QTY'][0]]
+      const qtyNew = newRow[fieldMapping['QTY'][1]]
+      if (qtyOld !== qtyNew) {
+        resultRow['QTY Rev-OLD'] = qtyOld
+        resultRow['QTY Rev-NEW'] = qtyNew
+        hasChanges = true
+      }
 
-    const allSelectedFields = new Set(Object.values(selectedFields).flat())
-    merged = merged.map((row: any) =>
-      Object.fromEntries(
-        Object.entries(row).filter(([key]) => allSelectedFields.has(key))
-      )
-    )
+      // Сравниваем Ref Des
+      const refDesOld = oldRow[fieldMapping['Ref Des'][0]]
+      const refDesNew = newRow[fieldMapping['Ref Des'][1]]
+      if (refDesOld !== refDesNew) {
+        resultRow['Ref Des Cancel'] = refDesOld
+        resultRow['Ref Des Add'] = refDesNew
+        hasChanges = true
+      }
 
-    setMergedData(merged)
+      // Добавляем Revision, если оно выбрано и есть изменения
+      if (hasChanges && fieldMapping['Revision'][0] && fieldMapping['Revision'][1]) {
+        resultRow['Revision-OLD'] = oldRow[fieldMapping['Revision'][0]]
+        resultRow['Revision-NEW'] = newRow[fieldMapping['Revision'][1]]
+      }
+
+      return hasChanges ? resultRow : null
+    }).filter(Boolean)
+
+    setComparisonResult(result)
   }
 
-  const downloadMergedFile = () => {
-    if (!mergedData) return
+  const downloadComparisonResult = () => {
+    if (!comparisonResult) return
 
-    const worksheet = XLSX.utils.json_to_sheet(mergedData)
+    // Определяем заголовки таблицы
+    const headers = [
+      'Number',
+      'Description',
+      ...(fieldMapping['Revision'][0] && fieldMapping['Revision'][1] ? ['Revision-OLD', 'Revision-NEW'] : []),
+      'QTY Rev-OLD',
+      'QTY Rev-NEW',
+      'Ref Des Cancel',
+      'Ref Des Add'
+    ]
+
+    // Преобразуем данные в формат, подходящий для XLSX
+    const data = comparisonResult.map(row => {
+      const rowData: any = {}
+      headers.forEach(header => {
+        rowData[header] = row[header] || ''
+      })
+      return rowData
+    })
+
+    // Создаем рабочую книгу и лист
+    const worksheet = XLSX.utils.json_to_sheet(data, { header: headers })
     const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Merged')
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Comparison')
+
+    // Генерируем файл и сохраняем его
     const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
-    const data = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-    saveAs(data, 'merged_tables.xlsx')
+    const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    saveAs(blob, 'comparison_result.xlsx')
   }
 
   return (
     <div className="App">
       <header className="App-header">
-        <h1 className="text-3xl font-bold mb-6">Excel Table Merger</h1>
+        <h1 className="text-3xl font-bold mb-6">Excel Table Comparison</h1>
         <div className="file-container-wrapper">
           {[0, 1].map((index) => (
             <div key={index} className="file-container">
-              <h2 className="text-xl font-semibold mb-4">File {index + 1}</h2>
-              <label htmlFor={`file-input-${index}`} className="mb-2 block">Choose Excel file:</label>
+              <h2 className="text-xl font-semibold mb-4">File {index + 1} ({index === 0 ? 'Old' : 'New'})</h2>
               <Input 
-                id={`file-input-${index}`}
                 type="file" 
                 accept=".xlsx,.xls" 
-                onChange={handleFileUpload} 
+                onChange={(e) => handleFileUpload(e, index)} 
                 className="mb-4" 
               />
-              {!files[index] && (
-                <p className="text-gray-500 mb-4">No file selected</p>
-              )}
-              {files[index] && (
-                <div className="file-content">
-                  <div className="fields-column">
-                    <h3 className="font-medium mb-2">Fields:</h3>
-                    {fields[files[index].name]?.map((field) => (
-                      <div key={field} className="field-item">
-                        {field}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="checkbox-column">
-                    <h3 className="font-medium mb-2">Select:</h3>
-                    {fields[files[index].name]?.map((field) => (
-                      <div key={field} className="checkbox-container">
-                        <input
-                          type="checkbox"
-                          id={`field-${files[index].name}-${field}`}
-                          className="checkbox"
-                          checked={selectedFields[files[index].name]?.includes(field)}
-                          onChange={() => handleFieldSelection(files[index].name, field)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="key-column">
-                    <h3 className="font-medium mb-2">Key field:</h3>
-                    <Select onValueChange={(value: string) => handleKeyFieldSelection(files[index].name, value)}>
-                      <SelectTrigger className="select-trigger">
-                        <SelectValue placeholder="Select a key field" />
-                      </SelectTrigger>
-                      <SelectContent className="select-content">
-                        {fields[files[index].name]?.map((field) => (
-                          <SelectItem key={field} value={field}>
-                            {field}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              )}
             </div>
           ))}
         </div>
+        {files.length === 2 && (
+          <div className="mapping-container">
+            <h2 className="text-xl font-semibold mb-4">Field Mapping</h2>
+            <div>
+              <p>File 1 fields: {fields[files[0]?.name]?.length}</p>
+              <p>File 2 fields: {fields[files[1]?.name]?.length}</p>
+            </div>
+            <div className="mapping-grid" style={{ display: 'flex' }}>
+              <div className="mapping-column new-fields" style={{ display: 'flex', flexDirection: 'column' }}>
+                <h3>Result Fields</h3>
+                {Object.keys(fieldMapping).map((newField) => (
+                  <div key={newField} className="mapping-row" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                    <span>{newField}</span>
+                  </div>
+                ))}
+              </div>
+              {[0, 1].map((fileIndex) => (
+                <div key={fileIndex} className="mapping-column" style={{ display: 'flex', flexDirection: 'column' }}>
+                  <h3>File {fileIndex + 1} Fields ({fileIndex === 0 ? 'Old' : 'New'})</h3>
+                  {Object.entries(fieldMapping).map(([newField, [oldField1, oldField2]]) => (
+                    <div key={newField} className="mapping-row" style={{ flex: 1 }}>
+                      <select
+                        value={fileIndex === 0 ? oldField1 : oldField2}
+                        onChange={(e) => handleFieldMapping(newField, fileIndex, e.target.value)}
+                        className="select-native"
+                        style={{
+                          height: '100%',
+                          width: '100%',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                          padding: '5px',
+                          outline: 'none',
+                        }}
+                        onFocus={(e) => e.target.style.boxShadow = '0 0 5px rgba(81, 203, 238, 1)'}
+                        onBlur={(e) => e.target.style.boxShadow = 'none'}
+                      >
+                        <option value="">Select a field</option>
+                        {fields[files[fileIndex]?.name]?.map((field) => (
+                          <option key={field} value={field}>
+                            {field}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="button-container">
-          <Button onClick={mergeTables} disabled={files.length < 2} className="button">
-            Merge
+          <Button onClick={compareTables} disabled={files.length < 2} className="button">
+            Compare
           </Button>
-          <Button onClick={downloadMergedFile} disabled={!mergedData} className="button">
-            Download
+          <Button onClick={downloadComparisonResult} disabled={!comparisonResult} className="button">
+            Download Result
           </Button>
         </div>
+        {comparisonResult && (
+          <div className="result-preview">
+            <h2 className="text-xl font-semibold mb-4">Comparison Result Preview</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Number</th>
+                  <th>Description</th>
+                  {fieldMapping['Revision'][0] && fieldMapping['Revision'][1] && (
+                    <>
+                      <th>Revision-OLD</th>
+                      <th>Revision-NEW</th>
+                    </>
+                  )}
+                  <th>QTY Rev-OLD</th>
+                  <th>QTY Rev-NEW</th>
+                  <th>Ref Des Cancel</th>
+                  <th>Ref Des Add</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparisonResult.slice(0, 5).map((row, index) => (
+                  <tr key={index}>
+                    <td>{row['Number']}</td>
+                    <td>{row['Description']}</td>
+                    {fieldMapping['Revision'][0] && fieldMapping['Revision'][1] && (
+                      <>
+                        <td>{row['Revision-OLD']}</td>
+                        <td>{row['Revision-NEW']}</td>
+                      </>
+                    )}
+                    <td>{row['QTY Rev-OLD']}</td>
+                    <td>{row['QTY Rev-NEW']}</td>
+                    <td>{row['Ref Des Cancel']}</td>
+                    <td>{row['Ref Des Add']}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {comparisonResult.length > 5 && <p>... and {comparisonResult.length - 5} more rows</p>}
+          </div>
+        )}
       </header>
     </div>
   );
