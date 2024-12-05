@@ -469,56 +469,65 @@ const App: React.FC = () => {
       alert('No data to download. Please merge tables first.');
       return;
     }
-
-    console.log('mergedPreview:', mergedPreview);  // Смотрим что в превью
-    console.log('selectedFieldsOrder:', selectedFieldsOrder);  // Проверяем порядок полей
-    // Используем точно те же данные, что видим в превью
-    const dataToExport = [...mergedPreview];
-    console.log('dataToExport перед созданием файла:', dataToExport); // Новый лог
-
+  
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Merged');
-
-    // Проверяем структуру колонок
-    console.log('Структура колонок:', selectedFieldsOrder.map(header => ({
-      header,
-      key: header,
-      width: header.startsWith('Level_') ? 8.43 : 
-             header === 'LevelValue' ? 8.43 :     
-             header === 'Note' ? 8.43 :           
-             12,
-    })));
-
-    worksheet.columns = selectedFieldsOrder.map(header => ({
-      header,
-      key: header,
-      width: header.startsWith('Level_') ? 8.43 : 
-             header === 'LevelValue' ? 8.43 :     
-             header === 'Note' ? 8.43 :           
-             12,
-    }));
+  
+    // Находим ключевые поля
+    const keyFieldPairs = Object.entries(keyFields).map(([fileName, field]) => {
+      const prefix = fileName === files[0].name ? 'Left.' : 'Right.';
+      return prefix + field;
+    });
+  
+    // Собираем пары колонок для копирования в конец, исключая ключевые поля
+    const comparePairs: string[][] = [];
+    selectedFieldsOrder.forEach(field => {
+      if (field.startsWith('Left.') && !keyFieldPairs.includes(field)) {
+        const rightField = field.replace('Left.', 'Right.');
+        if (selectedFieldsOrder.includes(rightField)) {
+          comparePairs.push([field, rightField]);
+        }
+      }
+    });
+  
+    // Создаем расширенные данные - копируем исходные и добавляем те же данные в новые колонки
+    const exportData = mergedPreview.map(row => {
+      const newRow = { ...row }; // Копируем все исходные данные
+      
+      // Добавляем те же данные в дополнительные колонки
+      comparePairs.forEach(([leftField, rightField]) => {
+        newRow[`Compare_${leftField}`] = row[leftField];
+        newRow[`Compare_${rightField}`] = row[rightField];
+      });
+      
+      return newRow;
+    });
+  
+    // Формируем все заголовки: исходные + дополнительные
+    const compareHeaders = comparePairs.flatMap(([leftField, rightField]) => 
+      [`Compare_${leftField}`, `Compare_${rightField}`]
+    );
     
-    console.log('Данные перед записью в файл:', mergedPreview); // Проверяем данные перед записью
-    worksheet.addRows(mergedPreview);
-
-    // Проверяем данные после добавления
-    console.log('Количество строк в worksheet:', worksheet.rowCount);
-    console.log('Первые несколько строк worksheet:');
-    for(let i = 1; i <= Math.min(5, worksheet.rowCount); i++) {
-        console.log(`Строка ${i}:`, worksheet.getRow(i).values);
-    }
-
-    // Стилизация заголовков
+    const allHeaders = [...selectedFieldsOrder, ...compareHeaders];
+  
+    worksheet.columns = allHeaders.map(header => ({
+      header,
+      key: header
+    }));
+  
+    worksheet.addRows(exportData);
+  
+    // Стандартное форматирование без изменений
     worksheet.getRow(1).eachCell((cell) => {
       cell.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'B1F0F0' }  // Голубой цвет
+        fgColor: { argb: 'B1F0F0' }
       };
       cell.font = {
         bold: true,
         size: 8.43,
-        color: { argb: '000000' }  // Черный цвет текста
+        color: { argb: '000000' }
       };
       cell.border = {
         top: { style: 'thin' },
@@ -527,12 +536,10 @@ const App: React.FC = () => {
         right: { style: 'thin' }
       };
     });
-
-    // Добавляем границы для всех данных
+  
     worksheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return; // Пропускаем заголовки
-
-      row.eachCell({ includeEmpty: true }, cell => { // includeEmpty: true - для всех ячеек
+      if (rowNumber === 1) return;
+      row.eachCell({ includeEmpty: true }, cell => {
         cell.border = {
           top: { style: 'thin' },
           left: { style: 'thin' },
@@ -541,13 +548,14 @@ const App: React.FC = () => {
         };
       });
     });
-
+  
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { 
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
     });
     saveAs(blob, 'merged_tables.xlsx');
   };
+  
 
   const expandRanges = (value: string): string => {
     const parts = value.split(',');
