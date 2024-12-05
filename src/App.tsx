@@ -490,25 +490,60 @@ const App: React.FC = () => {
       }
     });
   
-    // Создаем расширенные данные - копируем исходные и добавляем те же данные в новые колонки
+    // Получаем имя ключевого поля без префикса
+    const keyFieldName = keyFields[files[0].name].replace('Left.', '').replace('Right.', '');
+  
+    // Создаем расширенные данные
     const exportData = mergedPreview.map(row => {
-      const newRow = { ...row }; // Копируем все исходные данные
+      const newRow: Record<string, any> = {};
       
-      // Добавляем те же данные в дополнительные колонки
+      // Сначала копируем все Level поля
+      selectedFieldsOrder.forEach(field => {
+        if (field.startsWith('Level')) {
+          newRow[field] = (row as Record<string, any>)[field];
+        }
+      });
+  
+      // Затем добавляем ключевое поле
+      const leftKeyField = `Left.${keyFieldName}`;
+      const rightKeyField = `Right.${keyFieldName}`;
+      newRow[keyFieldName] = (row as Record<string, any>)[leftKeyField] || (row as Record<string, any>)[rightKeyField];
+  
+      // Копируем все остальные поля
+      Object.entries(row as Record<string, any>).forEach(([key, value]) => {
+        if (!key.startsWith('Level') && key !== leftKeyField && key !== rightKeyField) {
+          newRow[key] = value;
+        }
+      });
+      
+      // Добавляем сравнительные колонки в конец
       comparePairs.forEach(([leftField, rightField]) => {
-        newRow[`OLD_${leftField}`] = row[leftField];
-        newRow[`NEW_${rightField}`] = row[rightField];
+        const fieldName = leftField.replace('Left.', '');
+        newRow[`Old_${fieldName}`] = (row as Record<string, any>)[leftField];
+        newRow[`New_${fieldName}`] = (row as Record<string, any>)[rightField];
       });
       
       return newRow;
     });
   
-    // Формируем все заголовки: исходные + дополнительные
-    const compareHeaders = comparePairs.flatMap(([leftField, rightField]) => 
-      [`OLD_${leftField}`, `NEW_${rightField}`]
+    // Формируем заголовки
+    const compareHeaders = comparePairs.flatMap(([leftField]) => {
+      const fieldName = leftField.replace('Left.', '');
+      return [`Old_${fieldName}`, `New_${fieldName}`];
+    });
+    
+    // Сначала Level поля, потом ключевое поле, затем остальные
+    const levelHeaders = selectedFieldsOrder.filter(header => header.startsWith('Level'));
+    const remainingHeaders = selectedFieldsOrder.filter(header => 
+      !header.startsWith('Level') && !header.endsWith(keyFieldName)
     );
     
-    const allHeaders = [...selectedFieldsOrder, ...compareHeaders];
+    const allHeaders = [
+      ...levelHeaders,
+      keyFieldName,
+      ...remainingHeaders,
+      ...compareHeaders
+    ];
   
     worksheet.columns = allHeaders.map(header => ({
       header,
@@ -517,7 +552,6 @@ const App: React.FC = () => {
   
     worksheet.addRows(exportData);
   
-    // Стандартное форматирование без изменений
     worksheet.getRow(1).eachCell((cell) => {
       cell.fill = {
         type: 'pattern',
@@ -555,6 +589,8 @@ const App: React.FC = () => {
     });
     saveAs(blob, 'merged_tables.xlsx');
   };
+  
+  
   
 
   const expandRanges = (value: string): string => {
