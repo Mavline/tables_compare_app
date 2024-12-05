@@ -496,8 +496,8 @@ const App: React.FC = () => {
       
       // Добавляем те же данные в дополнительные колонки
       comparePairs.forEach(([leftField, rightField]) => {
-        newRow[`Compare_${leftField}`] = row[leftField];
-        newRow[`Compare_${rightField}`] = row[rightField];
+        newRow[`OLD_${leftField}`] = row[leftField];
+        newRow[`NEW_${rightField}`] = row[rightField];
       });
       
       return newRow;
@@ -505,7 +505,7 @@ const App: React.FC = () => {
   
     // Формируем все заголовки: исходные + дополнительные
     const compareHeaders = comparePairs.flatMap(([leftField, rightField]) => 
-      [`Compare_${leftField}`, `Compare_${rightField}`]
+      [`OLD_${leftField}`, `NEW_${rightField}`]
     );
     
     const allHeaders = [...selectedFieldsOrder, ...compareHeaders];
