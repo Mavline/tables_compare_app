@@ -504,14 +504,23 @@ const App: React.FC = () => {
         }
       });
   
-      // Затем добавляем ключевое поле
+      // Добавляем ключевое поле
       const leftKeyField = `Left.${keyFieldName}`;
       const rightKeyField = `Right.${keyFieldName}`;
       newRow[keyFieldName] = (row as Record<string, any>)[leftKeyField] || (row as Record<string, any>)[rightKeyField];
   
+      // Добавляем Description сразу после ключевого поля
+      const leftDesc = (row as Record<string, any>)['Left.Description'];
+      const rightDesc = (row as Record<string, any>)['Right.Description'];
+      newRow['Description'] = leftDesc || rightDesc;
+  
       // Копируем все остальные поля
       Object.entries(row as Record<string, any>).forEach(([key, value]) => {
-        if (!key.startsWith('Level') && key !== leftKeyField && key !== rightKeyField) {
+        if (!key.startsWith('Level') && 
+            key !== leftKeyField && 
+            key !== rightKeyField && 
+            key !== 'Left.Description' && 
+            key !== 'Right.Description') {
           newRow[key] = value;
         }
       });
@@ -519,8 +528,10 @@ const App: React.FC = () => {
       // Добавляем сравнительные колонки в конец
       comparePairs.forEach(([leftField, rightField]) => {
         const fieldName = leftField.replace('Left.', '');
-        newRow[`Old_${fieldName}`] = (row as Record<string, any>)[leftField];
-        newRow[`New_${fieldName}`] = (row as Record<string, any>)[rightField];
+        if (fieldName !== 'Description') {  // Пропускаем Description, так как уже обработали
+          newRow[`Old_${fieldName}`] = (row as Record<string, any>)[leftField];
+          newRow[`New_${fieldName}`] = (row as Record<string, any>)[rightField];
+        }
       });
       
       return newRow;
@@ -529,18 +540,23 @@ const App: React.FC = () => {
     // Формируем заголовки
     const compareHeaders = comparePairs.flatMap(([leftField]) => {
       const fieldName = leftField.replace('Left.', '');
-      return [`Old_${fieldName}`, `New_${fieldName}`];
+      return fieldName === 'Description' 
+        ? [] // Пропускаем Description в сравнительных колонках
+        : [`Old_${fieldName}`, `New_${fieldName}`];
     });
     
-    // Сначала Level поля, потом ключевое поле, затем остальные
+    // Сначала Level поля, потом ключевое поле и Description, затем остальные
     const levelHeaders = selectedFieldsOrder.filter(header => header.startsWith('Level'));
     const remainingHeaders = selectedFieldsOrder.filter(header => 
-      !header.startsWith('Level') && !header.endsWith(keyFieldName)
+      !header.startsWith('Level') && 
+      !header.endsWith(keyFieldName) && 
+      !header.endsWith('Description')
     );
     
     const allHeaders = [
       ...levelHeaders,
       keyFieldName,
+      'Description',
       ...remainingHeaders,
       ...compareHeaders
     ];
@@ -589,6 +605,7 @@ const App: React.FC = () => {
     });
     saveAs(blob, 'merged_tables.xlsx');
   };
+  
   
   
   
