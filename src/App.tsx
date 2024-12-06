@@ -559,7 +559,7 @@ const App: React.FC = () => {
       'Description',
       ...remainingHeaders,
       ...compareHeaders
-    ];
+    ].filter(header => !header.includes('Left') && !header.includes('Right'));
   
     worksheet.columns = allHeaders.map(header => ({
       header,
