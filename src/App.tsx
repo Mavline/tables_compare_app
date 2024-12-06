@@ -493,6 +493,14 @@ const App: React.FC = () => {
     // Получаем имя ключевого поля без префикса
     const keyFieldName = keyFields[files[0].name].replace('Left.', '').replace('Right.', '');
   
+    // Функция для обработки строк RefDes
+    const processRefDesString = (refDes: string): string[] => {
+      if (!refDes) return [];
+      return refDes.split(/[\s,;]+/)
+        .map(item => item.trim())
+        .filter(item => item && /^[A-Za-z0-9]+$/.test(item));
+    };
+  
     // Создаем расширенные данные
     const exportData = mergedPreview.map(row => {
       const newRow: Record<string, any> = {};
@@ -533,6 +541,20 @@ const App: React.FC = () => {
           newRow[`New_${fieldName}`] = (row as Record<string, any>)[rightField];
         }
       });
+  
+      // Добавляем анализ RefDes
+      const oldRefDes = processRefDesString(newRow['Old_BOM.Ref Des']);
+      const newRefDes = processRefDesString(newRow['New_BOM.Ref Des']);
+  
+      // Находим отмененные элементы (есть в old, нет в new)
+      const canceled = oldRefDes.filter(ref => !newRefDes.includes(ref));
+      
+      // Находим добавленные элементы (есть в new, нет в old)
+      const added = newRefDes.filter(ref => !oldRefDes.includes(ref));
+  
+      // Добавляем новые колонки
+      newRow['Canceled'] = canceled.join(', ');
+      newRow['Added'] = added.join(', ');
       
       return newRow;
     });
@@ -541,7 +563,7 @@ const App: React.FC = () => {
     const compareHeaders = comparePairs.flatMap(([leftField]) => {
       const fieldName = leftField.replace('Left.', '');
       return fieldName === 'Description' 
-        ? [] // Пропускаем Description в сравнительных колонках
+        ? [] 
         : [`Old_${fieldName}`, `New_${fieldName}`];
     });
     
@@ -558,7 +580,9 @@ const App: React.FC = () => {
       keyFieldName,
       'Description',
       ...remainingHeaders,
-      ...compareHeaders
+      ...compareHeaders,
+      'Canceled',  // Добавляем новые колонки в конец
+      'Added'
     ].filter(header => !header.includes('Left') && !header.includes('Right'));
   
     worksheet.columns = allHeaders.map(header => ({
