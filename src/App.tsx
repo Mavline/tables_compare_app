@@ -472,6 +472,27 @@ const App: React.FC = () => {
   
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Merged');
+
+    // Функция для поиска полей описания
+    const findDescriptionField = (fields: string[]): string | undefined => {
+      const possibleNames = [
+        'Description', 'DESC', 'DESCRIPTION', 'Desc',
+        'Name', 'NAME', 'ITEM_NAME', 'Item Name',
+        'Title', 'TITLE',
+        'תיאור', 'שם', 'כותרת', // Hebrew variants
+        'Item_Description', 'ItemDesc', 'Item_Name',
+        'Component_Description', 'Component_Name',
+        'Part_Description', 'Part_Name',
+        'Product_Description', 'Product_Name',
+        'Details', 'Specification',
+        'Label', 'Text_Description'
+      ];
+      return fields.find(field => 
+        possibleNames.some(name => 
+          field.toLowerCase().replace(/[_\s-]/g, '').includes(name.toLowerCase().replace(/[_\s-]/g, ''))
+        )
+      );
+    };
   
     // Находим ключевые поля
     const keyFieldPairs = Object.entries(keyFields).map(([fileName, field]) => {
@@ -479,7 +500,7 @@ const App: React.FC = () => {
       return prefix + field;
     });
   
-    // Собираем пары колонок для копирования в конец, исключая ключевые поля
+    // Собираем пары колонок для копирования в конец
     const comparePairs: string[][] = [];
     selectedFieldsOrder.forEach(field => {
       if (field.startsWith('Left.') && !keyFieldPairs.includes(field)) {
@@ -493,10 +514,19 @@ const App: React.FC = () => {
     // Получаем имя ключевого поля без префикса
     const keyFieldName = keyFields[files[0].name].replace('Left.', '').replace('Right.', '');
   
-    // Функция для обработки строк RefDes с учетом expandRanges
+    // Находим поля описания
+    const leftDescField = findDescriptionField(
+      selectedFieldsOrder.filter(f => f.startsWith('Left.'))
+    )?.replace('Left.', '');
+    const rightDescField = findDescriptionField(
+      selectedFieldsOrder.filter(f => f.startsWith('Right.'))
+    )?.replace('Right.', '');
+
+    const descFieldName = leftDescField || rightDescField || 'Description';
+  
+    // Функция для обработки строк RefDes
     const processRefDesString = (refDes: string): string[] => {
       if (!refDes) return [];
-      // Применяем expandRanges к строке перед разбиением
       const expandedRefDes = expandRanges(refDes);
       return expandedRefDes.split(/[\s,;]+/)
         .map(item => item.trim())
@@ -507,29 +537,30 @@ const App: React.FC = () => {
     const exportData = mergedPreview.map(row => {
       const newRow: Record<string, any> = {};
       
-      // Копируем все Level поля
+      // Копируем Level поля
       selectedFieldsOrder.forEach(field => {
         if (field.startsWith('Level')) {
           newRow[field] = (row as Record<string, any>)[field];
         }
       });
   
-      // Добавляем ключевое поле и Description
+      // Добавляем ключевое поле
       const leftKeyField = `Left.${keyFieldName}`;
       const rightKeyField = `Right.${keyFieldName}`;
       newRow[keyFieldName] = (row as Record<string, any>)[leftKeyField] || (row as Record<string, any>)[rightKeyField];
       
-      const leftDesc = (row as Record<string, any>)['Left.Description'];
-      const rightDesc = (row as Record<string, any>)['Right.Description'];
-      newRow['Description'] = leftDesc || rightDesc;
+      // Обрабатываем поле описания
+      const leftDesc = leftDescField ? (row as Record<string, any>)[`Left.${leftDescField}`] : '';
+      const rightDesc = rightDescField ? (row as Record<string, any>)[`Right.${rightDescField}`] : '';
+      newRow[descFieldName] = leftDesc || rightDesc;
   
       // Копируем остальные поля
       Object.entries(row as Record<string, any>).forEach(([key, value]) => {
         if (!key.startsWith('Level') && 
             key !== leftKeyField && 
             key !== rightKeyField && 
-            key !== 'Left.Description' && 
-            key !== 'Right.Description') {
+            !key.endsWith(leftDescField || '') && 
+            !key.endsWith(rightDescField || '')) {
           newRow[key] = value;
         }
       });
@@ -537,16 +568,14 @@ const App: React.FC = () => {
       // Добавляем сравнительные колонки
       comparePairs.forEach(([leftField, rightField]) => {
         const fieldName = leftField.replace('Left.', '');
-        if (fieldName !== 'Description') {
+        if (fieldName !== leftDescField && fieldName !== rightDescField) {
           newRow[`Old_${fieldName}`] = (row as Record<string, any>)[leftField];
           newRow[`New_${fieldName}`] = (row as Record<string, any>)[rightField];
 
-          // Если это поле выбрано для обработки expandRanges
           if (leftField === columnToProcess || rightField === secondColumnToProcess) {
             const oldValue = (row as Record<string, any>)[leftField];
             const newValue = (row as Record<string, any>)[rightField];
 
-            // Добавляем колонки Canceled и Added для каждого обрабатываемого поля
             const oldItems = processRefDesString(oldValue);
             const newItems = processRefDesString(newValue);
             
@@ -565,11 +594,10 @@ const App: React.FC = () => {
     // Формируем заголовки
     const compareHeaders = comparePairs.flatMap(([leftField]) => {
       const fieldName = leftField.replace('Left.', '');
-      if (fieldName === 'Description') return [];
+      if (fieldName === leftDescField || fieldName === rightDescField) return [];
       
       const headers = [`Old_${fieldName}`, `New_${fieldName}`];
       
-      // Добавляем Canceled/Added колонки для выбранных полей
       if (leftField === columnToProcess || leftField === secondColumnToProcess) {
         headers.push(`Canceled_${fieldName}`, `Added_${fieldName}`);
       }
@@ -577,18 +605,19 @@ const App: React.FC = () => {
       return headers;
     });
     
-    // Формируем все заголовки с учетом Level полей
+    // Формируем все заголовки
     const levelHeaders = selectedFieldsOrder.filter(header => header.startsWith('Level'));
     const remainingHeaders = selectedFieldsOrder.filter(header => 
       !header.startsWith('Level') && 
       !header.endsWith(keyFieldName) && 
-      !header.endsWith('Description')
+      !header.endsWith(leftDescField || '') &&
+      !header.endsWith(rightDescField || '')
     );
     
     const allHeaders = [
       ...levelHeaders,
       keyFieldName,
-      'Description',
+      descFieldName,
       ...remainingHeaders,
       ...compareHeaders
     ].filter(header => !header.includes('Left') && !header.includes('Right'));
@@ -600,7 +629,35 @@ const App: React.FC = () => {
       width: 15
     }));
   
-    worksheet.addRows(exportData);
+    // НОВЫЙ КОД: Фильтруем данные перед добавлением в таблицу
+    const filteredExportData = exportData.filter(row => {
+      // Получаем все заголовки из текущей строки
+      const rowHeaders = Object.keys(row);
+      
+      // Находим пары колонок Old/New
+      const columnPairs = rowHeaders
+        .filter(header => header.startsWith('Old_'))
+        .map(oldHeader => {
+          const baseName = oldHeader.replace('Old_', '');
+          const newHeader = `New_${baseName}`;
+          return { oldHeader, newHeader };
+        })
+        .filter(pair => rowHeaders.includes(pair.newHeader));
+
+      // Проверяем различия хотя бы в одной паре
+      return columnPairs.some(pair => {
+        const oldValue = (row[pair.oldHeader] || '').toString().trim();
+        const newValue = (row[pair.newHeader] || '').toString().trim();
+        
+        return oldValue !== newValue && 
+               !(oldValue === '' && newValue === '') && 
+               !(oldValue === '--' && newValue === '--') &&
+               !(oldValue === '.' && newValue === '.');
+      });
+    });
+  
+    // Добавляем отфильтрованные данные
+    worksheet.addRows(filteredExportData);
   
     // Применяем стили
     worksheet.getRow(1).eachCell((cell) => {
@@ -640,6 +697,7 @@ const App: React.FC = () => {
     });
     saveAs(blob, 'merged_tables.xlsx');
 };
+
 
   
 
