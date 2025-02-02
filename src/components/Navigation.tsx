@@ -42,7 +42,7 @@ const Navigation: React.FC = () => {
           MAIN
         </Link>
         <Link 
-          to="/docs" 
+          to="/about" 
           style={{
             color: '#7E57C2',
             textDecoration: 'none',
@@ -61,7 +61,7 @@ const Navigation: React.FC = () => {
             e.currentTarget.style.color = '#7E57C2';
           }}
         >
-          DOCS
+          ABOUT
         </Link>
       </div>
     </nav>

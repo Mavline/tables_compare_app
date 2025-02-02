@@ -1,7 +1,7 @@
 import React from 'react';
 import '../App.css';
 
-const Docs: React.FC = () => {
+const About: React.FC = () => {
   return (
     <div className="App">
       <header className="App-header">
@@ -120,4 +120,4 @@ const Docs: React.FC = () => {
   );
 };
 
-export default Docs; 
+export default About; 

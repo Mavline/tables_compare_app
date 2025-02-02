@@ -11,7 +11,7 @@ import './App.css';
 import ExcelJS from 'exceljs';
 import { useTableContext } from './context/TableContext';
 import Navigation from './components/Navigation';
-import Docs from './components/Docs';
+import About from './components/About';
 
 // Define the GroupInfo type
 interface GroupInfo {
@@ -1057,7 +1057,7 @@ const App: React.FC = () => {
       <Navigation />
       <Routes>
         <Route path="/" element={<MainContent />} />
-        <Route path="/docs" element={<Docs />} />
+        <Route path="/about" element={<About />} />
       </Routes>
     </>
   );
