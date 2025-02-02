@@ -45,6 +45,7 @@ const MainContent: React.FC = () => {
   const [columnToProcess, setColumnToProcess] = useState<string>('');
   const [secondColumnToProcess, setSecondColumnToProcess] = useState<string>('');
   const [fieldMappings, setFieldMappings] = useState<FieldMapping[]>([]);
+  const [fileIds, setFileIds] = useState<{ [key: number]: string }>({});
 
   const { mergedData, saveMergedData, clearData } = useTableContext();
 
@@ -81,53 +82,76 @@ const MainContent: React.FC = () => {
     setSelectedFieldsOrder(allSelectedFields);
   }, [selectedFields, files]);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("File upload started");
-    const newFiles = Array.from(event.target.files || []);
-    console.log("New files:", newFiles.map(f => f.name));
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    console.log("File upload started for index:", index);
+    const file = event.target.files?.[0];
+    if (!file) return;
 
-    for (const file of newFiles) {
-      console.log(`Processing file: ${file.name}`);
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        console.log(`File ${file.name} loaded`);
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetNames = workbook.SheetNames;
-        console.log(`Sheets in ${file.name}:`, sheetNames);
+    console.log("Processing new file:", file.name);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      console.log(`File ${file.name} loaded`);
+      const data = new Uint8Array(e.target?.result as ArrayBuffer);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheetNames = workbook.SheetNames;
+      console.log(`Sheets in ${file.name}:`, sheetNames);
 
-        setFiles(prevFiles => [...prevFiles, file]);
-        setSheets(prevSheets => ({
-          ...prevSheets,
-          [file.name]: sheetNames
-        }));
-      };
-      reader.readAsArrayBuffer(file);
-    }
+      // Обновляем состояние для конкретного индекса
+      setFiles(prevFiles => {
+        const newFiles = [...prevFiles];
+        newFiles[index] = file;
+        return newFiles;
+      });
+
+      // Очищаем связанные состояния для этого файла
+      setSheets(prevSheets => ({
+        ...prevSheets,
+        [file.name]: sheetNames
+      }));
+      setSelectedSheets(prev => {
+        const newSelected = { ...prev };
+        delete newSelected[file.name];
+        return newSelected;
+      });
+      setFields(prev => {
+        const newFields = { ...prev };
+        delete newFields[file.name];
+        return newFields;
+      });
+      setSelectedFields(prev => {
+        const newSelected = { ...prev };
+        delete newSelected[file.name];
+        return newSelected;
+      });
+      setKeyFields(prev => {
+        const newKeys = { ...prev };
+        delete newKeys[file.name];
+        return newKeys;
+      });
+      setTables(prevTables => {
+        const newTables = [...prevTables];
+        newTables[index] = [];
+        return newTables;
+      });
+      setGroupingStructure(prev => {
+        const newStructure = { ...prev };
+        delete newStructure[file.name];
+        return newStructure;
+      });
+      
+      // Сбрасываем предварительный просмотр
+      setMergedPreview([]);
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   const processSheet = async (file: File, sheetName: string) => {
     try {
       const arrayBuffer = await file.arrayBuffer();
-      console.log(`ArrayBuffer obtained for ${file.name}`);
-
-      const zip = new JSZip();
-      const zipContents = await zip.loadAsync(arrayBuffer);
-
-      console.log('Files in ZIP:', Object.keys(zipContents.files));
-
-      let sheetXmlPath = `xl/worksheets/sheet${sheetName}.xml`;
-      if (!zipContents.files[sheetXmlPath]) {
-        const sheetIndex = 1;
-        sheetXmlPath = `xl/worksheets/sheet${sheetIndex}.xml`;
-      }
-
-      console.log(`Trying to access sheet XML at path: ${sheetXmlPath}`);
-      const sheetXml = await zipContents.file(sheetXmlPath)?.async('string');
-
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
       const worksheet = workbook.Sheets[sheetName];
 
+      // Находим заголовки
       const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
       const endRow = Math.min(range.e.r, 49);
       const tempRange = { ...range, e: { ...range.e, r: endRow } };
@@ -136,9 +160,7 @@ const MainContent: React.FC = () => {
       const containsLetters = (str: string) => /[a-zA-Z]/.test(str);
 
       const countSignificantCells = (row: any[]) =>
-        row.filter(
-          (cell) => cell && typeof cell === "string" && containsLetters(cell),
-        ).length;
+        row.filter(cell => cell && typeof cell === "string" && containsLetters(cell)).length;
 
       let headerRowIndex = 0;
       let maxSignificantCells = 0;
@@ -154,6 +176,7 @@ const MainContent: React.FC = () => {
       const headerRow = partialJson[headerRowIndex];
       let headers: string[] = headerRow.map(cell => String(cell || '').trim());
 
+      // Обрабатываем дубликаты в заголовках
       const headerCount: { [key: string]: number } = {};
       headers = headers.map(header => {
         if (headerCount[header]) {
@@ -165,6 +188,7 @@ const MainContent: React.FC = () => {
         }
       });
 
+      // Получаем данные с правильными заголовками
       const fullRange = {
         ...range,
         s: { ...range.s, r: headerRowIndex + 1 },
@@ -174,33 +198,29 @@ const MainContent: React.FC = () => {
         header: headers,
       });
 
-      console.log('Header row index:', headerRowIndex);
-      console.log('JSON Data length:', jsonData.length);
-      console.log('First few rows:', jsonData.slice(0, 5));
-
+      // Обновляем состояния
+      const fileIndex = files.findIndex(f => f.name === file.name);
       setTables(prevTables => {
-        console.log('Setting table data:', jsonData);
-        return [...prevTables, jsonData];
+        const newTables = [...prevTables];
+        newTables[fileIndex] = jsonData;
+        return newTables;
       });
 
       setFields(prevFields => ({
         ...prevFields,
         [file.name]: headers
       }));
-      setSelectedFields(prevSelected => ({
-        ...prevSelected,
-        [file.name]: [],
-      }));
-      setKeyFields(prevKeys => ({
-        ...prevKeys,
-        [file.name]: '',
-      }));
 
-      setSelectedSheets(prevSelected => ({
-        ...prevSelected,
-        [file.name]: sheetName
-      }));
+      // Обрабатываем группировку
+      const zip = new JSZip();
+      const zipContents = await zip.loadAsync(arrayBuffer);
+      let sheetXmlPath = `xl/worksheets/sheet${sheetName}.xml`;
+      if (!zipContents.files[sheetXmlPath]) {
+        const sheetIndex = 1;
+        sheetXmlPath = `xl/worksheets/sheet${sheetIndex}.xml`;
+      }
 
+      const sheetXml = await zipContents.file(sheetXmlPath)?.async('string');
       if (sheetXml) {
         const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
         const parsedXml = parser.parse(sheetXml);
@@ -217,7 +237,7 @@ const MainContent: React.FC = () => {
       }
 
     } catch (error) {
-      console.error('Error in processSheet:', error);
+      console.error('Error processing sheet:', error);
     }
   };
 
@@ -244,13 +264,53 @@ const MainContent: React.FC = () => {
     return groupingInfo;
   };
 
-  const handleSheetSelection = (fileName: string, sheetName: string) => {
+  const handleSheetSelection = async (fileName: string, sheetName: string) => {
+    console.log(`Sheet selection changed for ${fileName} to ${sheetName}`);
     const file = files.find(f => f.name === fileName);
-    if (file) {
-      processSheet(file, sheetName);
-    } else {
+    if (!file) {
       console.error(`File not found: ${fileName}`);
+      return;
     }
+
+    // Очищаем связанные состояния перед обработкой нового листа
+    const fileIndex = files.findIndex(f => f.name === fileName);
+    setTables(prevTables => {
+      const newTables = [...prevTables];
+      newTables[fileIndex] = [];
+      return newTables;
+    });
+    setFields(prev => {
+      const newFields = { ...prev };
+      delete newFields[fileName];
+      return newFields;
+    });
+    setSelectedFields(prev => {
+      const newSelected = { ...prev };
+      delete newSelected[fileName];
+      return newSelected;
+    });
+    setKeyFields(prev => {
+      const newKeys = { ...prev };
+      delete newKeys[fileName];
+      return newKeys;
+    });
+    setGroupingStructure(prev => {
+      const newStructure = { ...prev };
+      delete newStructure[fileName];
+      return newStructure;
+    });
+
+    // Сбрасываем предварительный просмотр
+    setMergedPreview([]);
+
+    // Обновляем выбранный лист
+    setSelectedSheets(prev => ({
+      ...prev,
+      [fileName]: sheetName
+    }));
+
+    // Обрабатываем новый лист
+    await processSheet(file, sheetName);
   };
 
   const handleFieldSelection = (fileName: string, field: string) => {
@@ -323,7 +383,26 @@ const MainContent: React.FC = () => {
     return row;
   };
 
+  const validateFileIds = () => {
+    if (!fileIds[0] || !fileIds[1]) {
+      alert('Please enter identifiers for both files');
+      return false;
+    }
+    return true;
+  };
+
+  const handleFileIdChange = (index: number, value: string) => {
+    setFileIds(prev => ({
+      ...prev,
+      [index]: value
+    }));
+  };
+
   const mergeTables = async () => {
+    if (!validateFileIds()) {
+      return;
+    }
+
     console.log('Starting merge process...');
 
     if (tables.length < 2) {
@@ -489,6 +568,10 @@ const MainContent: React.FC = () => {
       return;
     }
   
+    if (!validateFileIds()) {
+      return;
+    }
+  
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Merged');
 
@@ -588,8 +671,8 @@ const MainContent: React.FC = () => {
       comparePairs.forEach(([leftField, rightField]) => {
         const fieldName = leftField.replace('Left.', '');
         if (fieldName !== leftDescField && fieldName !== rightDescField) {
-          newRow[`Old_${fieldName}`] = (row as Record<string, any>)[leftField];
-          newRow[`New_${fieldName}`] = (row as Record<string, any>)[rightField];
+          newRow[`${fileIds[0]}_${fieldName}`] = (row as Record<string, any>)[leftField];
+          newRow[`${fileIds[1]}_${fieldName}`] = (row as Record<string, any>)[rightField];
 
           if (leftField === columnToProcess || rightField === secondColumnToProcess) {
             const oldValue = (row as Record<string, any>)[leftField];
@@ -615,7 +698,7 @@ const MainContent: React.FC = () => {
       const fieldName = leftField.replace('Left.', '');
       if (fieldName === leftDescField || fieldName === rightDescField) return [];
       
-      const headers = [`Old_${fieldName}`, `New_${fieldName}`];
+      const headers = [`${fileIds[0]}_${fieldName}`, `${fileIds[1]}_${fieldName}`];
       
       if (leftField === columnToProcess || leftField === secondColumnToProcess) {
         headers.push(`Canceled_${fieldName}`, `Added_${fieldName}`);
@@ -653,25 +736,25 @@ const MainContent: React.FC = () => {
       // Получаем все заголовки из текущей строки
       const rowHeaders = Object.keys(row);
       
-      // Находим пары колонок Old/New
+      // Находим пары колонок с пользовательскими идентификаторами
       const columnPairs = rowHeaders
-        .filter(header => header.startsWith('Old_'))
-        .map(oldHeader => {
-          const baseName = oldHeader.replace('Old_', '');
-          const newHeader = `New_${baseName}`;
-          return { oldHeader, newHeader };
+        .filter(header => header.startsWith(`${fileIds[0]}_`))
+        .map(firstHeader => {
+          const baseName = firstHeader.replace(`${fileIds[0]}_`, '');
+          const secondHeader = `${fileIds[1]}_${baseName}`;
+          return { firstHeader, secondHeader };
         })
-        .filter(pair => rowHeaders.includes(pair.newHeader));
+        .filter(pair => rowHeaders.includes(pair.secondHeader));
 
       // Проверяем различия хотя бы в одной паре
       return columnPairs.some(pair => {
-        const oldValue = (row[pair.oldHeader] || '').toString().trim();
-        const newValue = (row[pair.newHeader] || '').toString().trim();
+        const firstValue = (row[pair.firstHeader] || '').toString().trim();
+        const secondValue = (row[pair.secondHeader] || '').toString().trim();
         
-        return oldValue !== newValue && 
-               !(oldValue === '' && newValue === '') && 
-               !(oldValue === '--' && newValue === '--') &&
-               !(oldValue === '.' && newValue === '.');
+        return firstValue !== secondValue && 
+               !(firstValue === '' && secondValue === '') && 
+               !(firstValue === '--' && secondValue === '--') &&
+               !(firstValue === '.' && secondValue === '.');
       });
     });
   
@@ -780,6 +863,7 @@ const MainContent: React.FC = () => {
     setColumnToProcess('');
     setSecondColumnToProcess('');
     setFieldMappings([]);
+    setFileIds({});
     
     // Перезагружаем страницу
     window.location.reload();
@@ -892,7 +976,30 @@ const MainContent: React.FC = () => {
                 padding: '20px',
                 borderRadius: '8px'
               }}>
-                <h2 className="text-xl font-semibold mb-4" style={{ color: '#E6EDF3' }}>File {index + 1}</h2>
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '15px',
+                  marginBottom: '20px' 
+                }}>
+                  <h2 className="text-xl font-semibold" style={{ color: '#E6EDF3' }}>File {index + 1}</h2>
+                  <input
+                    type="text"
+                    placeholder="Enter file identifier (required)"
+                    value={fileIds[index] || ''}
+                    onChange={(e) => handleFileIdChange(index, e.target.value)}
+                    required
+                    style={{
+                      padding: '8px 12px',
+                      backgroundColor: '#1C2128',
+                      color: '#E6EDF3',
+                      border: '1px solid #7E57C2',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                      width: '250px'
+                    }}
+                  />
+                </div>
                 <label htmlFor={`file-input-${index}`} className="mb-2 block" style={{ color: '#E6EDF3' }}>
                   Choose Excel file:
                 </label>
@@ -905,7 +1012,7 @@ const MainContent: React.FC = () => {
                     id={`file-input-${index}`}
                     type="file"
                     accept=".xlsx,.xls"
-                    onChange={handleFileUpload}
+                    onChange={(e) => handleFileUpload(e, index)}
                     style={{
                       opacity: 0,
                       position: 'absolute',
@@ -937,6 +1044,16 @@ const MainContent: React.FC = () => {
                 {!files[index] && (
                   <p style={{ color: '#E6EDF3', marginBottom: '15px' }}>No file selected</p>
                 )}
+                {files[index] && (
+                  <p style={{ 
+                    color: '#7E57C2', 
+                    marginBottom: '15px',
+                    fontSize: '14px',
+                    fontWeight: 'bold'
+                  }}>
+                    Selected file: {files[index].name}
+                  </p>
+                )}
                 {files[index] && sheets[files[index].name] && (
                   <div className="mb-4">
                     <select
@@ -958,6 +1075,71 @@ const MainContent: React.FC = () => {
                       ))}
                     </select>
                   </div>
+                )}
+
+                {files[index] && selectedSheets[files[index].name] && fields[files[index].name] && (
+                  <>
+                    <div style={{ marginBottom: '20px' }}>
+                      <h3 style={{ 
+                        color: '#E6EDF3',
+                        fontSize: '16px',
+                        marginBottom: '10px'
+                      }}>Select Key Field:</h3>
+                      <select
+                        value={keyFields[files[index].name] || ""}
+                        onChange={(e) => handleKeyFieldSelection(files[index].name, e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "8px",
+                          border: "1px solid #7E57C2",
+                          borderRadius: "4px",
+                          backgroundColor: "#1C2128",
+                          color: "#E6EDF3",
+                          fontSize: "14px"
+                        }}
+                      >
+                        <option value="">Select a key field</option>
+                        {fields[files[index].name].map((field) => (
+                          <option key={field} value={field}>{field}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <h3 style={{ 
+                        color: '#E6EDF3',
+                        fontSize: '16px',
+                        marginBottom: '10px'
+                      }}>Select Fields to Compare:</h3>
+                      <div style={{
+                        display: 'grid',
+                        gap: '8px',
+                        maxHeight: '200px',
+                        overflowY: 'auto',
+                        padding: '5px'
+                      }}>
+                        {fields[files[index].name].map((field) => (
+                          <label
+                            key={field}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              color: '#E6EDF3',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedFields[files[index].name]?.includes(field) || false}
+                              onChange={() => handleFieldSelection(files[index].name, field)}
+                              style={{ marginRight: '8px' }}
+                            />
+                            {field}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             ))}
