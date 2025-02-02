@@ -47,11 +47,12 @@
   },
   "devDependencies": {
     "@babel/plugin-proposal-private-property-in-object": "^7.16.7",
-    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^14.4.3",
     "@types/file-saver": "^2.0.7",
     "@types/jest": "^27.5.2",
+    "@types/testing-library__react": "^10.0.1",
     "react-scripts": "5.0.1"
   },
   "resolutions": {
