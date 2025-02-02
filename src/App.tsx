@@ -21,6 +21,13 @@ interface GroupInfo {
   parent?: number;
 }
 
+// Define field mapping interface
+interface FieldMapping {
+  leftField: string;
+  rightField: string;
+  isActive: boolean;
+}
+
 // Define the TableRow type
 type TableRow = Record<string, any>;
 
@@ -37,6 +44,7 @@ const MainContent: React.FC = () => {
   const [groupingStructure, setGroupingStructure] = useState<{ [key: string]: { [key: string]: GroupInfo } }>({});
   const [columnToProcess, setColumnToProcess] = useState<string>('');
   const [secondColumnToProcess, setSecondColumnToProcess] = useState<string>('');
+  const [fieldMappings, setFieldMappings] = useState<FieldMapping[]>([]);
 
   const { mergedData, saveMergedData, clearData } = useTableContext();
 
@@ -344,6 +352,13 @@ const MainContent: React.FC = () => {
     // Создаем результирующий массив
     const resultRows: TableRow[] = [];
 
+    // Создаем маппинг полей для быстрого доступа
+    const fieldMappingDict = Object.fromEntries(
+      fieldMappings
+        .filter(m => m.isActive && m.leftField && m.rightField)
+        .map(m => [m.leftField, m.rightField])
+    );
+
     // Обрабатываем каждую позицию
     for (let i = 0; i < maxLength; i++) {
       const firstRow = firstTable[i];
@@ -360,18 +375,18 @@ const MainContent: React.FC = () => {
             if (field.startsWith('Level_') || field === 'LevelValue') {
               baseRow[field] = firstRow[field];
             } else {
-              baseRow[`Left.${field}`] = firstRow[field];
-            }
-          }
-        });
-
-        // Добавляем данные из второй таблицы (если есть соответствие)
-        fields[files[1].name].forEach(field => {
-          if (selectedFields[files[1].name].includes(field)) {
-            if (field.startsWith('Level_') || field === 'LevelValue') {
-              baseRow[field] = matchingSecondRow ? matchingSecondRow[field] : '';
-            } else {
-              baseRow[`Right.${field}`] = matchingSecondRow ? matchingSecondRow[field] : '';
+              // Проверяем, есть ли маппинг для этого поля
+              const mappedField = fieldMappingDict[field];
+              if (mappedField) {
+                // Если есть маппинг, используем оригинальное имя поля для левой стороны
+                baseRow[`Left.${field}`] = firstRow[field];
+                // И маппинговое имя поля для правой стороны
+                baseRow[`Right.${mappedField}`] = matchingSecondRow ? matchingSecondRow[mappedField] : '';
+              } else {
+                // Если нет маппинга, используем стандартную логику
+                baseRow[`Left.${field}`] = firstRow[field];
+                baseRow[`Right.${field}`] = matchingSecondRow ? matchingSecondRow[field] : '';
+              }
             }
           }
         });
@@ -382,24 +397,20 @@ const MainContent: React.FC = () => {
       if (secondRow && !firstTableMap.has(secondRow[secondKeyField])) {
         const baseRow = createBaseRow(resultRows.length);
 
-        // Пустые значения для первой таблицы
+        // Пустые значения для первой таблицы и данные из второй с учетом маппинга
         fields[files[0].name].forEach(field => {
           if (selectedFields[files[0].name].includes(field)) {
             if (field.startsWith('Level_') || field === 'LevelValue') {
               baseRow[field] = '';
             } else {
-              baseRow[`Left.${field}`] = '';
-            }
-          }
-        });
-
-        // Данные из второй таблицы
-        fields[files[1].name].forEach(field => {
-          if (selectedFields[files[1].name].includes(field)) {
-            if (field.startsWith('Level_') || field === 'LevelValue') {
-              baseRow[field] = secondRow[field];
-            } else {
-              baseRow[`Right.${field}`] = secondRow[field];
+              const mappedField = fieldMappingDict[field];
+              if (mappedField) {
+                baseRow[`Left.${field}`] = '';
+                baseRow[`Right.${mappedField}`] = secondRow[mappedField];
+              } else {
+                baseRow[`Left.${field}`] = '';
+                baseRow[`Right.${field}`] = secondRow[field];
+              }
             }
           }
         });
@@ -408,7 +419,7 @@ const MainContent: React.FC = () => {
       }
     }
 
-    // Формируем заголовки
+    // Формируем заголовки с учетом маппинга
     const groupedFile = files[0];
     const groupInfo = groupingStructure[groupedFile.name];
     const maxLevel = groupInfo ? Math.max(...Object.values(groupInfo).map(info => info.level)) : 0;
@@ -421,14 +432,20 @@ const MainContent: React.FC = () => {
         if (field.startsWith('Level_') || field === 'LevelValue') {
           return field;
         }
-        return `${index === 0 ? 'Left' : 'Right'}.${field}`;
+        // Учитываем маппинг при формировании заголовков
+        if (index === 0) {
+          return `Left.${field}`;
+        } else {
+          const mappedField = Object.entries(fieldMappingDict).find(([_, right]) => right === field)?.[0] || field;
+          return `Right.${mappedField}`;
+        }
       });
       dataHeaders.push(...prefixedFields);
     });
 
     const allHeaders = [...groupHeaders, 'LevelValue', ...dataHeaders];
 
-    // Обработка диапазонов если нужно
+    // Остальной код без изменений...
     const resultData = columnToProcess || secondColumnToProcess
       ? resultRows.map((row) => {
           if (columnToProcess) {
@@ -762,9 +779,28 @@ const MainContent: React.FC = () => {
     setGroupingStructure({});
     setColumnToProcess('');
     setSecondColumnToProcess('');
+    setFieldMappings([]);
     
     // Перезагружаем страницу
     window.location.reload();
+  };
+
+  const handleFieldMappingChange = (index: number, field: 'leftField' | 'rightField', value: string) => {
+    setFieldMappings((prevMappings) =>
+      prevMappings.map((mapping, i) =>
+        i === index ? { ...mapping, [field]: value } : mapping
+      )
+    );
+  };
+
+  const removeFieldMapping = (index: number) => {
+    setFieldMappings((prevMappings) =>
+      prevMappings.filter((_, i) => i !== index)
+    );
+  };
+
+  const addFieldMapping = () => {
+    setFieldMappings((prevMappings) => [...prevMappings, { leftField: '', rightField: '', isActive: true }]);
   };
 
   return (
@@ -806,110 +842,223 @@ const MainContent: React.FC = () => {
         </div>
 
         <h1 className="text-3xl font-bold mb-6">Excel Table Merger</h1>
-        <div className="file-container-wrapper">
-          {[0, 1].map((index) => (
-            <div key={index} className="file-container">
-              <h2 className="text-xl font-semibold mb-4">File {index + 1}</h2>
-              <label htmlFor={`file-input-${index}`} className="mb-2 block">
-                Choose Excel file:
-              </label>
-              <Input
-                id={`file-input-${index}`}
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleFileUpload}
-                className="mb-4 w-full p-2 border border-gray-300 rounded"
-                style={{
-                  backgroundColor: "#59fafc",
-                  color: "black"
-                }}
-              />
-              {!files[index] && (
-                <p className="text-gray-500 mb-4">No file selected</p>
-              )}
-              {files[index] && sheets[files[index].name] && (
-                <div className="mb-4" style={{ width: "100%" }}>
-                  <select
-                    value={selectedSheets[files[index].name] || ""}
-                    onChange={(e) =>
-                      handleSheetSelection(files[index].name, e.target.value)
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "8px",
-                      border: "1px solid #ccc",
-                      borderRadius: "4px",
-                      backgroundColor: "#59fafc",
-                      color: "black",
-                      fontSize: "14px",
-                    }}
-                  >
-                    <option value="">Select a sheet</option>
-                    {sheets[files[index].name].map((sheet, sheetIndex) => (
-                      <option key={`${sheet}-${sheetIndex}`} value={sheet}>{sheet}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+        
+        <div style={{ 
+          backgroundColor: '#1C2128', 
+          padding: '20px', 
+          borderRadius: '8px', 
+          marginBottom: '20px',
+          color: '#E6EDF3',
+          width: '100%',
+          textAlign: 'left'
+        }}>
+          <h2 style={{ 
+            color: '#7E57C2', 
+            marginBottom: '15px', 
+            fontSize: '20px' 
+          }}>Quick Start Guide:</h2>
+          <div style={{ 
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            alignItems: 'flex-start',
+            lineHeight: '1.8',
+            fontSize: '16px'
+          }}>
+            <span>Upload two Excel files you want to compare</span>
+            <span>Select sheets from each file</span>
+            <span>Check boxes next to columns you want to compare</span>
+            <span>Select a key column (like Part Number) in each file to match rows</span>
+            <span>If same columns have different names - map them in the section below</span>
+            <span>Click "Merge" to see preview, then "Download" for full report</span>
+          </div>
+        </div>
 
-              {files[index] && selectedSheets[files[index].name] && (
-                <div className="file-content">
-                  <div className="fields-column">
-                    <h3 className="font-medium mb-2">Fields:</h3>
-                    {fields[files[index].name]?.map((field, fieldIndex) => (
-                      <div key={`${field}-${fieldIndex}`} className="field-item">
-                        {field}
-                      </div>
-                    ))}
+        <div style={{
+          width: '100%',
+          backgroundColor: '#1C2128',
+          padding: '20px',
+          borderRadius: '8px',
+          marginBottom: '20px'
+        }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '20px'
+          }}>
+            {[0, 1].map((index) => (
+              <div key={index} style={{
+                backgroundColor: '#161B22',
+                padding: '20px',
+                borderRadius: '8px'
+              }}>
+                <h2 className="text-xl font-semibold mb-4" style={{ color: '#E6EDF3' }}>File {index + 1}</h2>
+                <label htmlFor={`file-input-${index}`} className="mb-2 block" style={{ color: '#E6EDF3' }}>
+                  Choose Excel file:
+                </label>
+                <div style={{
+                  position: 'relative',
+                  marginBottom: '20px',
+                  width: '520px'
+                }}>
+                  <Input
+                    id={`file-input-${index}`}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleFileUpload}
+                    style={{
+                      opacity: 0,
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: '100%',
+                      cursor: 'pointer',
+                      zIndex: 2
+                    }}
+                  />
+                  <div style={{
+                    padding: '10px 15px',
+                    backgroundColor: '#4B3B80',
+                    color: '#E6EDF3',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    width: '100%',
+                    position: 'relative',
+                    zIndex: 1
+                  }}>
+                    Choose File
                   </div>
-                  <div className="checkbox-column">
-                    <h3 className="font-medium mb-2">Select:</h3>
-                    {fields[files[index].name]?.map((field) => (
-                      <div key={field} className="checkbox-container">
-                        <input
-                          type="checkbox"
-                          id={`field-${files[index].name}-${field}`}
-                          className="checkbox"
-                          checked={selectedFields[files[index].name]?.includes(field)}
-                          onChange={() => handleFieldSelection(files[index].name, field)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <div className="key-column">
-                    <h3 className="font-medium mb-2">Key field:</h3>
+                </div>
+                {!files[index] && (
+                  <p style={{ color: '#E6EDF3', marginBottom: '15px' }}>No file selected</p>
+                )}
+                {files[index] && sheets[files[index].name] && (
+                  <div className="mb-4">
                     <select
-                      value={keyFields[files[index].name] || ""}
-                      onChange={(e) =>
-                        handleKeyFieldSelection(
-                          files[index].name,
-                          e.target.value,
-                        )
-                      }
+                      value={selectedSheets[files[index].name] || ""}
+                      onChange={(e) => handleSheetSelection(files[index].name, e.target.value)}
                       style={{
                         width: "100%",
                         padding: "8px",
-                        border: "1px solid #ccc",
+                        border: "1px solid #7E57C2",
                         borderRadius: "4px",
-                        backgroundColor: "#59fafc",
-                        color: "black",
-                        fontSize: "14px",
+                        backgroundColor: "#1C2128",
+                        color: "#E6EDF3",
+                        fontSize: "14px"
                       }}
                     >
-                      <option value="">Select a key field</option>
-                      {fields[files[index].name]?.map((field, fieldIndex) => (
-                        <option key={`key-${index}-${field}-${fieldIndex}`} value={field}>
-                          {field}
-                        </option>
+                      <option value="">Select a sheet</option>
+                      {sheets[files[index].name].map((sheet, sheetIndex) => (
+                        <option key={`${sheet}-${sheetIndex}`} value={sheet}>{sheet}</option>
                       ))}
                     </select>
                   </div>
-                </div>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="controls-container">
+        <div className="field-mapping-container" style={{ 
+          backgroundColor: '#161B22',
+          padding: '20px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          width: '100%'
+        }}>
+          <h3 style={{ 
+            color: '#E6EDF3',
+            marginBottom: '15px',
+            fontSize: '18px',
+            fontWeight: 'bold'
+          }}>
+            For different column names (if needed - optional)
+          </h3>
+          <div style={{ 
+            display: 'grid',
+            gridTemplateColumns: '1fr auto 1fr auto',
+            gap: '10px',
+            alignItems: 'center'
+          }}>
+            {fieldMappings.map((mapping, index) => (
+              <React.Fragment key={index}>
+                <select
+                  value={mapping.leftField}
+                  onChange={(e) => handleFieldMappingChange(index, 'leftField', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    backgroundColor: '#1C2128',
+                    color: '#E6EDF3',
+                    border: '1px solid #7E57C2',
+                    borderRadius: '4px'
+                  }}
+                >
+                  <option value="">Select field from File 1</option>
+                  {files[0] && fields[files[0].name]?.map((field) => (
+                    <option key={field} value={field}>{field}</option>
+                  ))}
+                </select>
+                <span style={{ color: '#7E57C2', padding: '0 10px' }}>→</span>
+                <select
+                  value={mapping.rightField}
+                  onChange={(e) => handleFieldMappingChange(index, 'rightField', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px',
+                    backgroundColor: '#1C2128',
+                    color: '#E6EDF3',
+                    border: '1px solid #7E57C2',
+                    borderRadius: '4px'
+                  }}
+                >
+                  <option value="">Select field from File 2</option>
+                  {files[1] && fields[files[1].name]?.map((field) => (
+                    <option key={field} value={field}>{field}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => removeFieldMapping(index)}
+                  style={{
+                    padding: '8px',
+                    backgroundColor: '#4B3B80',
+                    color: '#E6EDF3',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ✕
+                </button>
+              </React.Fragment>
+            ))}
+          </div>
+          <button
+            onClick={addFieldMapping}
+            style={{
+              marginTop: '10px',
+              padding: '8px 16px',
+              backgroundColor: '#4B3B80',
+              color: '#E6EDF3',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            Add Column Pair
+          </button>
+        </div>
+        <div className="controls-container" style={{
+          width: '100%',
+          backgroundColor: '#1C2128',
+          padding: '20px',
+          borderRadius: '8px',
+          marginBottom: '20px'
+        }}>
           {/* Первый селектор столбца */}
           <div className="range-selector" style={{ marginBottom: '10px' }}>
             <select
@@ -918,10 +1067,10 @@ const MainContent: React.FC = () => {
               style={{
                 width: "100%",
                 padding: "8px",
-                border: "1px solid #ccc",
+                border: "1px solid #7E57C2",
                 borderRadius: "4px",
-                backgroundColor: "#59fafc",
-                color: "black",
+                backgroundColor: "#1C2128",
+                color: "#E6EDF3",
                 fontSize: "14px",
               }}
             >
@@ -942,10 +1091,10 @@ const MainContent: React.FC = () => {
               style={{
                 width: "100%",
                 padding: "8px",
-                border: "1px solid #ccc",
+                border: "1px solid #7E57C2",
                 borderRadius: "4px",
-                backgroundColor: "#59fafc",
-                color: "black",
+                backgroundColor: "#1C2128",
+                color: "#E6EDF3",
                 fontSize: "14px",
               }}
             >
@@ -964,9 +1113,15 @@ const MainContent: React.FC = () => {
               onClick={mergeTables}
               disabled={files.length < 2}
               style={{
-                padding: "8px 16px",
-                backgroundColor: "#59fafc",
+                padding: "10px 20px",
+                backgroundColor: "#4B3B80",
+                color: "#E6EDF3",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
                 marginRight: "10px",
+                fontSize: "14px",
+                fontWeight: "bold"
               }}
             >
               Merge
@@ -975,9 +1130,15 @@ const MainContent: React.FC = () => {
               onClick={downloadMergedFile}
               disabled={!mergedPreview}
               style={{
-                padding: "8px 16px",
-                backgroundColor: "#59fafc",
+                padding: "10px 20px",
+                backgroundColor: "#4B3B80",
+                color: "#E6EDF3",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
                 marginRight: "10px",
+                fontSize: "14px",
+                fontWeight: "bold"
               }}
             >
               Download
@@ -987,7 +1148,13 @@ const MainContent: React.FC = () => {
       </header>
 
       {mergedPreview && mergedPreview.length > 0 && (
-        <div className="merged-preview" style={{ margin: "20px 0" }}>
+        <div className="merged-preview" style={{ 
+          margin: "20px 0",
+          width: '100%',
+          backgroundColor: '#1C2128',
+          padding: '20px',
+          borderRadius: '8px'
+        }}>
           <h2 className="text-xl font-semibold mb-4">Merged Data Preview</h2>
           <div style={{ overflowX: "auto" }}>
             <table
