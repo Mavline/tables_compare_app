@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { Routes, Route } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
@@ -9,6 +10,8 @@ import Input from "./components/ui/input";
 import './App.css';
 import ExcelJS from 'exceljs';
 import { useTableContext } from './context/TableContext';
+import Navigation from './components/Navigation';
+import Docs from './components/Docs';
 
 // Define the GroupInfo type
 interface GroupInfo {
@@ -21,8 +24,7 @@ interface GroupInfo {
 // Define the TableRow type
 type TableRow = Record<string, any>;
 
-const App: React.FC = () => {
-
+const MainContent: React.FC = () => {
   const [files, setFiles] = useState<File[]>([]);
   const [tables, setTables] = useState<TableRow[][]>([]);
   const [fields, setFields] = useState<{ [key: string]: string[] }>({});
@@ -530,7 +532,7 @@ const App: React.FC = () => {
       const expandedRefDes = expandRanges(refDes);
       return expandedRefDes.split(/[\s,;]+/)
         .map(item => item.trim())
-        .filter(item => item && /^[A-Za-z0-9]+$/.test(item));
+        .filter(item => item && /^[A-Za-z0-9_]+$/.test(item));
     };
   
     // Создаем расширенные данные
@@ -710,8 +712,8 @@ const App: React.FC = () => {
       if (part.includes('-')) {
         const [start, end] = part.split('-').map((s) => s.trim());
 
-        const startMatch = start.match(/^([A-Za-z]*)(\d+)$/);
-        const endMatch = end.match(/^([A-Za-z]*)(\d+)$/);
+        const startMatch = start.match(/^([A-Za-z_]*)(\d+)$/);
+        const endMatch = end.match(/^([A-Za-z_]*)(\d+)$/);
 
         if (startMatch && endMatch) {
           const startPrefix = startMatch[1];
@@ -1048,5 +1050,18 @@ const App: React.FC = () => {
     </div>
   );
 };
+
+const App: React.FC = () => {
+  return (
+    <>
+      <Navigation />
+      <Routes>
+        <Route path="/" element={<MainContent />} />
+        <Route path="/docs" element={<Docs />} />
+      </Routes>
+    </>
+  );
+};
+
 export default App;
 
