@@ -35,7 +35,6 @@ const MainContent: React.FC = () => {
   const [files, setFiles] = useState<File[]>([]);
   const [tables, setTables] = useState<TableRow[][]>([]);
   const [fields, setFields] = useState<{ [key: string]: string[] }>({});
-  const [selectedFields, setSelectedFields] = useState<{ [key: string]: string[] }>({});
   const [keyFields, setKeyFields] = useState<{ [key: string]: string }>({});
   const [sheets, setSheets] = useState<{ [key: string]: string[] }>({});
   const [selectedSheets, setSelectedSheets] = useState<{ [key: string]: string }>({});
@@ -63,24 +62,19 @@ const MainContent: React.FC = () => {
   }, [mergedData, selectedFieldsOrder, files, tables]);
 
   useEffect(() => {
-    const allSelectedFields: string[] = [];
+    // Формируем заголовки из маппинга и служебных полей
+    const groupedFile = files[0];
+    const groupInfo = groupingStructure[groupedFile?.name];
+    const maxLevel = groupInfo ? Math.max(...Object.values(groupInfo).map(info => info.level)) : 0;
+    const groupHeaders = Array.from({ length: maxLevel + 1 }, (_, i) => `Level_${i + 1}`);
 
-    // Собираем все выбранные поля из обеих таблиц с префиксами
-    files.forEach((file, index) => {
-      const fileFields = selectedFields[file.name] || [];
-      // Добавляем поля с префиксами, кроме служебных полей
-      const prefixedFields = fileFields.map(field => {
-        if (field.startsWith('Level_') || field === 'LevelValue') {
-          return field;
-        }
-        return `${index === 0 ? 'Left' : 'Right'}.${field}`;
-      });
-      allSelectedFields.push(...prefixedFields);
-    });
+    const dataHeaders = fieldMappings
+      .filter(m => m.isActive && m.leftField && m.rightField)
+      .flatMap(mapping => [`Left.${mapping.leftField}`, `Right.${mapping.rightField}`]);
 
-    // Обновляем selectedFieldsOrder
-    setSelectedFieldsOrder(allSelectedFields);
-  }, [selectedFields, files]);
+    const allHeaders = [...groupHeaders, 'LevelValue', ...dataHeaders];
+    setSelectedFieldsOrder(allHeaders);
+  }, [files, groupingStructure, fieldMappings]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>, index: number) => {
     console.log("File upload started for index:", index);
@@ -117,11 +111,6 @@ const MainContent: React.FC = () => {
         const newFields = { ...prev };
         delete newFields[file.name];
         return newFields;
-      });
-      setSelectedFields(prev => {
-        const newSelected = { ...prev };
-        delete newSelected[file.name];
-        return newSelected;
       });
       setKeyFields(prev => {
         const newKeys = { ...prev };
@@ -284,11 +273,6 @@ const MainContent: React.FC = () => {
       delete newFields[fileName];
       return newFields;
     });
-    setSelectedFields(prev => {
-      const newSelected = { ...prev };
-      delete newSelected[fileName];
-      return newSelected;
-    });
     setKeyFields(prev => {
       const newKeys = { ...prev };
       delete newKeys[fileName];
@@ -311,20 +295,6 @@ const MainContent: React.FC = () => {
 
     // Обрабатываем новый лист
     await processSheet(file, sheetName);
-  };
-
-  const handleFieldSelection = (fileName: string, field: string) => {
-    setSelectedFields((prevFields) => {
-      const currentFields = prevFields[fileName] || [];
-      const isFieldSelected = currentFields.includes(field);
-      
-      return {
-        ...prevFields,
-        [fileName]: isFieldSelected 
-          ? currentFields.filter(f => f !== field)
-          : [...currentFields, field]
-      };
-    });
   };
 
   const handleKeyFieldSelection = (fileName: string, field: string) => {
@@ -416,6 +386,12 @@ const MainContent: React.FC = () => {
       return;
     }
 
+    // Проверяем, что есть хотя бы одно сопоставление полей
+    if (fieldMappings.length === 0) {
+      alert("Please map at least one field pair for comparison.");
+      return;
+    }
+
     const firstTable = tables[0];
     const secondTable = tables[1];
     const firstKeyField = keyFields[files[0].name];
@@ -438,6 +414,11 @@ const MainContent: React.FC = () => {
         .map(m => [m.leftField, m.rightField])
     );
 
+    // Создаем обратный маппинг для поиска соответствий справа налево
+    const reverseFieldMappingDict = Object.fromEntries(
+      Object.entries(fieldMappingDict).map(([left, right]) => [right, left])
+    );
+
     // Обрабатываем каждую позицию
     for (let i = 0; i < maxLength; i++) {
       const firstRow = firstTable[i];
@@ -448,25 +429,11 @@ const MainContent: React.FC = () => {
         const firstKey = firstRow[firstKeyField];
         const matchingSecondRow = secondTableMap.get(firstKey);
 
-        // Добавляем данные из первой таблицы
-        fields[files[0].name].forEach(field => {
-          if (selectedFields[files[0].name].includes(field)) {
-            if (field.startsWith('Level_') || field === 'LevelValue') {
-              baseRow[field] = firstRow[field];
-            } else {
-              // Проверяем, есть ли маппинг для этого поля
-              const mappedField = fieldMappingDict[field];
-              if (mappedField) {
-                // Если есть маппинг, используем оригинальное имя поля для левой стороны
-                baseRow[`Left.${field}`] = firstRow[field];
-                // И маппинговое имя поля для правой стороны
-                baseRow[`Right.${mappedField}`] = matchingSecondRow ? matchingSecondRow[mappedField] : '';
-              } else {
-                // Если нет маппинга, используем стандартную логику
-                baseRow[`Left.${field}`] = firstRow[field];
-                baseRow[`Right.${field}`] = matchingSecondRow ? matchingSecondRow[field] : '';
-              }
-            }
+        // Добавляем данные из маппинга
+        fieldMappings.forEach(mapping => {
+          if (mapping.isActive && mapping.leftField && mapping.rightField) {
+            baseRow[`Left.${mapping.leftField}`] = firstRow[mapping.leftField] || '';
+            baseRow[`Right.${mapping.rightField}`] = matchingSecondRow ? matchingSecondRow[mapping.rightField] : '';
           }
         });
 
@@ -476,21 +443,11 @@ const MainContent: React.FC = () => {
       if (secondRow && !firstTableMap.has(secondRow[secondKeyField])) {
         const baseRow = createBaseRow(resultRows.length);
 
-        // Пустые значения для первой таблицы и данные из второй с учетом маппинга
-        fields[files[0].name].forEach(field => {
-          if (selectedFields[files[0].name].includes(field)) {
-            if (field.startsWith('Level_') || field === 'LevelValue') {
-              baseRow[field] = '';
-            } else {
-              const mappedField = fieldMappingDict[field];
-              if (mappedField) {
-                baseRow[`Left.${field}`] = '';
-                baseRow[`Right.${mappedField}`] = secondRow[mappedField];
-              } else {
-                baseRow[`Left.${field}`] = '';
-                baseRow[`Right.${field}`] = secondRow[field];
-              }
-            }
+        // Добавляем данные из маппинга
+        fieldMappings.forEach(mapping => {
+          if (mapping.isActive && mapping.leftField && mapping.rightField) {
+            baseRow[`Left.${mapping.leftField}`] = '';
+            baseRow[`Right.${mapping.rightField}`] = secondRow[mapping.rightField] || '';
           }
         });
 
@@ -498,29 +455,16 @@ const MainContent: React.FC = () => {
       }
     }
 
-    // Формируем заголовки с учетом маппинга
+    // Формируем заголовки
     const groupedFile = files[0];
     const groupInfo = groupingStructure[groupedFile.name];
     const maxLevel = groupInfo ? Math.max(...Object.values(groupInfo).map(info => info.level)) : 0;
     const groupHeaders = Array.from({ length: maxLevel + 1 }, (_, i) => `Level_${i + 1}`);
 
-    const dataHeaders: string[] = [];
-    files.forEach((file, index) => {
-      const fileFields = fields[file.name].filter(field => selectedFields[file.name].includes(field));
-      const prefixedFields = fileFields.map(field => {
-        if (field.startsWith('Level_') || field === 'LevelValue') {
-          return field;
-        }
-        // Учитываем маппинг при формировании заголовков
-        if (index === 0) {
-          return `Left.${field}`;
-        } else {
-          const mappedField = Object.entries(fieldMappingDict).find(([_, right]) => right === field)?.[0] || field;
-          return `Right.${mappedField}`;
-        }
-      });
-      dataHeaders.push(...prefixedFields);
-    });
+    // Формируем заголовки из маппинга
+    const dataHeaders = fieldMappings
+      .filter(m => m.isActive && m.leftField && m.rightField)
+      .flatMap(mapping => [`Left.${mapping.leftField}`, `Right.${mapping.rightField}`]);
 
     const allHeaders = [...groupHeaders, 'LevelValue', ...dataHeaders];
 
@@ -545,13 +489,10 @@ const MainContent: React.FC = () => {
 
     // Фильтруем строки с полным совпадением
     const filteredData = resultData.filter(row => {
-      const leftFields = selectedFieldsOrder.filter(field => field.startsWith('Left.'));
-      const rightFields = selectedFieldsOrder.filter(field => field.startsWith('Right.'));
-
-      return leftFields.some(leftField => {
-        const rightField = leftField.replace('Left.', 'Right.');
-        const leftValue = row[leftField]?.toString().trim() || '';
-        const rightValue = row[rightField]?.toString().trim() || '';
+      return fieldMappings.some(mapping => {
+        if (!mapping.isActive || !mapping.leftField || !mapping.rightField) return false;
+        const leftValue = (row[`Left.${mapping.leftField}`] || '').toString().trim();
+        const rightValue = (row[`Right.${mapping.rightField}`] || '').toString().trim();
         return leftValue !== rightValue;
       });
     });
@@ -853,7 +794,6 @@ const MainContent: React.FC = () => {
     setFiles([]);
     setTables([]);
     setFields({});
-    setSelectedFields({});
     setKeyFields({});
     setSheets({});
     setSelectedSheets({});
@@ -870,11 +810,24 @@ const MainContent: React.FC = () => {
   };
 
   const handleFieldMappingChange = (index: number, field: 'leftField' | 'rightField', value: string) => {
-    setFieldMappings((prevMappings) =>
-      prevMappings.map((mapping, i) =>
+    setFieldMappings((prevMappings) => {
+      // Check if this mapping already exists
+      const isDuplicate = prevMappings.some((mapping, i) => 
+        i !== index && 
+        ((field === 'leftField' && mapping.leftField === value) ||
+         (field === 'rightField' && mapping.rightField === value))
+      );
+
+      if (isDuplicate) {
+        alert('This field is already mapped to another column');
+        return prevMappings;
+      }
+
+      // Update the mapping
+      return prevMappings.map((mapping, i) =>
         i === index ? { ...mapping, [field]: value } : mapping
-      )
-    );
+      );
+    });
   };
 
   const removeFieldMapping = (index: number) => {
@@ -884,7 +837,36 @@ const MainContent: React.FC = () => {
   };
 
   const addFieldMapping = () => {
-    setFieldMappings((prevMappings) => [...prevMappings, { leftField: '', rightField: '', isActive: true }]);
+    // Получаем все доступные поля из обоих файлов
+    const leftFields = files[0] && fields[files[0].name]?.filter(
+      field => !field.startsWith('Level_') && field !== 'LevelValue'
+    ) || [];
+    
+    const rightFields = files[1] && fields[files[1].name]?.filter(
+      field => !field.startsWith('Level_') && field !== 'LevelValue'
+    ) || [];
+
+    // Исключаем уже использованные в маппинге поля
+    const existingLeftFields = new Set(fieldMappings.map(m => m.leftField));
+    const existingRightFields = new Set(fieldMappings.map(m => m.rightField));
+    
+    const availableLeftFields = leftFields.filter(
+      field => !existingLeftFields.has(field)
+    );
+    
+    const availableRightFields = rightFields.filter(
+      field => !existingRightFields.has(field)
+    );
+
+    if (!availableLeftFields.length || !availableRightFields.length) {
+      alert('No more fields available for mapping');
+      return;
+    }
+
+    setFieldMappings((prevMappings) => [
+      ...prevMappings, 
+      { leftField: '', rightField: '', isActive: true }
+    ]);
   };
 
   return (
@@ -925,7 +907,7 @@ const MainContent: React.FC = () => {
           </span>
         </div>
 
-        <h1 className="text-3xl font-bold mb-6">Excel Table Merger</h1>
+        <h1 className="text-3xl font-bold mb-6">Browser App for comparing of bill of materials</h1>
         
         <div style={{ 
           backgroundColor: '#1C2128', 
@@ -1078,68 +1060,31 @@ const MainContent: React.FC = () => {
                 )}
 
                 {files[index] && selectedSheets[files[index].name] && fields[files[index].name] && (
-                  <>
-                    <div style={{ marginBottom: '20px' }}>
-                      <h3 style={{ 
-                        color: '#E6EDF3',
-                        fontSize: '16px',
-                        marginBottom: '10px'
-                      }}>Select Key Field:</h3>
-                      <select
-                        value={keyFields[files[index].name] || ""}
-                        onChange={(e) => handleKeyFieldSelection(files[index].name, e.target.value)}
-                        style={{
-                          width: "100%",
-                          padding: "8px",
-                          border: "1px solid #7E57C2",
-                          borderRadius: "4px",
-                          backgroundColor: "#1C2128",
-                          color: "#E6EDF3",
-                          fontSize: "14px"
-                        }}
-                      >
-                        <option value="">Select a key field</option>
-                        {fields[files[index].name].map((field) => (
-                          <option key={field} value={field}>{field}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <h3 style={{ 
-                        color: '#E6EDF3',
-                        fontSize: '16px',
-                        marginBottom: '10px'
-                      }}>Select Fields to Compare:</h3>
-                      <div style={{
-                        display: 'grid',
-                        gap: '8px',
-                        maxHeight: '200px',
-                        overflowY: 'auto',
-                        padding: '5px'
-                      }}>
-                        {fields[files[index].name].map((field) => (
-                          <label
-                            key={field}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              color: '#E6EDF3',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedFields[files[index].name]?.includes(field) || false}
-                              onChange={() => handleFieldSelection(files[index].name, field)}
-                              style={{ marginRight: '8px' }}
-                            />
-                            {field}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </>
+                  <div style={{ marginBottom: '20px' }}>
+                    <h3 style={{ 
+                      color: '#E6EDF3',
+                      fontSize: '16px',
+                      marginBottom: '10px'
+                    }}>Select Key Field:</h3>
+                    <select
+                      value={keyFields[files[index].name] || ""}
+                      onChange={(e) => handleKeyFieldSelection(files[index].name, e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        border: "1px solid #7E57C2",
+                        borderRadius: "4px",
+                        backgroundColor: "#1C2128",
+                        color: "#E6EDF3",
+                        fontSize: "14px"
+                      }}
+                    >
+                      <option value="">Select a key field</option>
+                      {fields[files[index].name].map((field) => (
+                        <option key={field} value={field}>{field}</option>
+                      ))}
+                    </select>
+                  </div>
                 )}
               </div>
             ))}
@@ -1158,7 +1103,7 @@ const MainContent: React.FC = () => {
             fontSize: '18px',
             fontWeight: 'bold'
           }}>
-            For different column names (if needed - optional)
+            Map Fields to Compare
           </h3>
           <div style={{ 
             display: 'grid',
@@ -1166,58 +1111,89 @@ const MainContent: React.FC = () => {
             gap: '10px',
             alignItems: 'center'
           }}>
-            {fieldMappings.map((mapping, index) => (
-              <React.Fragment key={index}>
-                <select
-                  value={mapping.leftField}
-                  onChange={(e) => handleFieldMappingChange(index, 'leftField', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    backgroundColor: '#1C2128',
-                    color: '#E6EDF3',
-                    border: '1px solid #7E57C2',
-                    borderRadius: '4px'
-                  }}
-                >
-                  <option value="">Select field from File 1</option>
-                  {files[0] && fields[files[0].name]?.map((field) => (
-                    <option key={field} value={field}>{field}</option>
-                  ))}
-                </select>
-                <span style={{ color: '#7E57C2', padding: '0 10px' }}>→</span>
-                <select
-                  value={mapping.rightField}
-                  onChange={(e) => handleFieldMappingChange(index, 'rightField', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px',
-                    backgroundColor: '#1C2128',
-                    color: '#E6EDF3',
-                    border: '1px solid #7E57C2',
-                    borderRadius: '4px'
-                  }}
-                >
-                  <option value="">Select field from File 2</option>
-                  {files[1] && fields[files[1].name]?.map((field) => (
-                    <option key={field} value={field}>{field}</option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => removeFieldMapping(index)}
-                  style={{
-                    padding: '8px',
-                    backgroundColor: '#4B3B80',
-                    color: '#E6EDF3',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  ✕
-                </button>
-              </React.Fragment>
-            ))}
+            {fieldMappings.map((mapping, index) => {
+              // Получаем все доступные поля (кроме служебных)
+              const leftFields = files[0] && fields[files[0].name]?.filter(
+                field => !field.startsWith('Level_') && field !== 'LevelValue'
+              ) || [];
+              
+              const rightFields = files[1] && fields[files[1].name]?.filter(
+                field => !field.startsWith('Level_') && field !== 'LevelValue'
+              ) || [];
+              
+              // Исключаем уже использованные поля (кроме текущего маппинга)
+              const existingLeftFields = new Set(
+                fieldMappings
+                  .filter((_, i) => i !== index)
+                  .map(m => m.leftField)
+              );
+              const existingRightFields = new Set(
+                fieldMappings
+                  .filter((_, i) => i !== index)
+                  .map(m => m.rightField)
+              );
+              
+              const availableLeftFields = leftFields.filter(
+                field => !existingLeftFields.has(field) || field === mapping.leftField
+              );
+              
+              const availableRightFields = rightFields.filter(
+                field => !existingRightFields.has(field) || field === mapping.rightField
+              );
+
+              return (
+                <React.Fragment key={index}>
+                  <select
+                    value={mapping.leftField}
+                    onChange={(e) => handleFieldMappingChange(index, 'leftField', e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      backgroundColor: '#1C2128',
+                      color: '#E6EDF3',
+                      border: '1px solid #7E57C2',
+                      borderRadius: '4px'
+                    }}
+                  >
+                    <option value="">Select field from File 1</option>
+                    {availableLeftFields.map((field) => (
+                      <option key={field} value={field}>{field}</option>
+                    ))}
+                  </select>
+                  <span style={{ color: '#7E57C2', padding: '0 10px' }}>→</span>
+                  <select
+                    value={mapping.rightField}
+                    onChange={(e) => handleFieldMappingChange(index, 'rightField', e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      backgroundColor: '#1C2128',
+                      color: '#E6EDF3',
+                      border: '1px solid #7E57C2',
+                      borderRadius: '4px'
+                    }}
+                  >
+                    <option value="">Select field from File 2</option>
+                    {availableRightFields.map((field) => (
+                      <option key={field} value={field}>{field}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => removeFieldMapping(index)}
+                    style={{
+                      padding: '8px',
+                      backgroundColor: '#4B3B80',
+                      color: '#E6EDF3',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ✕
+                  </button>
+                </React.Fragment>
+              );
+            })}
           </div>
           <button
             onClick={addFieldMapping}
@@ -1231,7 +1207,7 @@ const MainContent: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            Add Column Pair
+            Add Field Pair
           </button>
         </div>
         <div className="controls-container" style={{
