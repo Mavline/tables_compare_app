@@ -407,18 +407,6 @@ const MainContent: React.FC = () => {
     // Создаем результирующий массив
     const resultRows: TableRow[] = [];
 
-    // Создаем маппинг полей для быстрого доступа
-    const fieldMappingDict = Object.fromEntries(
-      fieldMappings
-        .filter(m => m.isActive && m.leftField && m.rightField)
-        .map(m => [m.leftField, m.rightField])
-    );
-
-    // Создаем обратный маппинг для поиска соответствий справа налево
-    const reverseFieldMappingDict = Object.fromEntries(
-      Object.entries(fieldMappingDict).map(([left, right]) => [right, left])
-    );
-
     // Обрабатываем каждую позицию
     for (let i = 0; i < maxLength; i++) {
       const firstRow = firstTable[i];
@@ -838,13 +826,13 @@ const MainContent: React.FC = () => {
 
   const addFieldMapping = () => {
     // Получаем все доступные поля из обоих файлов
-    const leftFields = files[0] && fields[files[0].name]?.filter(
+    const leftFields = (files[0] && fields[files[0].name]?.filter(
       field => !field.startsWith('Level_') && field !== 'LevelValue'
-    ) || [];
-    
-    const rightFields = files[1] && fields[files[1].name]?.filter(
+    )) || [];
+
+    const rightFields = (files[1] && fields[files[1].name]?.filter(
       field => !field.startsWith('Level_') && field !== 'LevelValue'
-    ) || [];
+    )) || [];
 
     // Исключаем уже использованные в маппинге поля
     const existingLeftFields = new Set(fieldMappings.map(m => m.leftField));
@@ -1113,13 +1101,13 @@ const MainContent: React.FC = () => {
           }}>
             {fieldMappings.map((mapping, index) => {
               // Получаем все доступные поля (кроме служебных)
-              const leftFields = files[0] && fields[files[0].name]?.filter(
+              const leftFields = (files[0] && fields[files[0].name]?.filter(
                 field => !field.startsWith('Level_') && field !== 'LevelValue'
-              ) || [];
-              
-              const rightFields = files[1] && fields[files[1].name]?.filter(
+              )) || [];
+
+              const rightFields = (files[1] && fields[files[1].name]?.filter(
                 field => !field.startsWith('Level_') && field !== 'LevelValue'
-              ) || [];
+              )) || [];
               
               // Исключаем уже использованные поля (кроме текущего маппинга)
               const existingLeftFields = new Set(
