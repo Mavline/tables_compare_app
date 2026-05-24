@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd); HOOK=\"$HOME/.codex/skills/memory-graph/scripts/codex_session_context_hook.sh\"; if [ -x \"$HOOK\" ]; then \"$HOOK\"; else echo \"memory-graph hook not installed; skipping\"; fi'",
+            "statusMessage": "Loading memgraph memory context",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

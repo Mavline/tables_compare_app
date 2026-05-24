@@ -21,3 +21,18 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# agent state
+/.agent/
+/.agent/**
+
+# local agent overrides
+/.claude/settings.local.json
+/.codex/settings.local.toml
+
+# fixtures with real customer data should never be committed
+/fixtures/private/
+
+# editor / OS noise
+.idea/
+.vscode/*.code-workspace
