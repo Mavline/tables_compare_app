@@ -49,16 +49,17 @@ Every durable write must go through the `memgraph` CLI so the typed table, FTS i
 
 Workflow records (`open-wf`, `open-run`, `close-run`, …) are available but should only be opened when this project explicitly adopts multi-agent orchestration. For one-off tasks, use `.agent/tasks/<TASK_ID>/` files instead of run/tranche objects.
 
-## Scripted seeding (the one exception)
+## Scripted seeding
 
-`scripts/seed-memory.sh` inserts initial policies, decisions, and claims through direct SQL because seeding needs to run during bootstrap before `OPENAI_API_KEY` is necessarily set. The script:
+`scripts/seed-memory.sh` drives the baseline entities, policies, decisions, and claims through the `memgraph` CLI, so FTS, sqlite-vec, and `embedding_meta` are populated inline with each write. The script:
 
-- writes only to the typed tables (`policies`, `decisions`, `claims`, `entities`, `relations`) with matching rows in `objects`;
-- never writes to `index_docs`, `memory_vec`, or `embedding_meta`;
-- re-renders the `generated_views` so `session-context` still produces useful output;
-- prints a reminder to run `memgraph rebuild-index` once an API key is available.
+- requires `OPENAI_API_KEY`. It auto-loads from `<repo>/.env` or from the sibling `Doc_generating/.env`; if neither resolves a key, it exits with a clear error;
+- before re-writing, deletes the prior seed batch by canonical identifier (entity `canonical_name`, `policy_name`, decision title, claim statement prefix) inside a transaction with `PRAGMA foreign_keys = ON` so `ON DELETE CASCADE` actually fires;
+- runs a defensive orphan sweep on `entities`, `policies`, `decisions`, and `claims` to recover from any earlier seed run that left rows without a parent `object`;
+- writes one row at a time via `memgraph write-entity`, `write-policy`, `write-decision`, `write-claim` — never by direct SQL on those tables;
+- is idempotent: re-running yields the same baseline without duplicates.
 
-Any further memory work must go through the CLI.
+The direct-SQL portion is limited to the cleanup transaction; no row is ever inserted into `objects`, `index_docs`, `memory_vec`, or `embedding_meta` by hand. Any further memory work goes through the CLI.
 
 ## What must be remembered
 
@@ -80,7 +81,7 @@ Any further memory work must go through the CLI.
 ## Technical invariants
 
 - Schema is the v1 `memory-graph` schema (24 tables, FTS5, sqlite-vec with 512-dim embeddings, model `text-embedding-3-small`).
-- Never hand-edit rows in `objects`, `index_docs`, `memory_vec`, or `embedding_meta` outside `scripts/seed-memory.sh`'s narrow scope.
+- Never hand-edit rows in `objects`, `index_docs`, `memory_vec`, or `embedding_meta`. Even `scripts/seed-memory.sh` only deletes rows directly; every insert goes through the CLI.
 - Never write rows with mismatched embedding hashes or manually edited vector state.
 - `.agent/` is gitignored; do not commit `.agent/memory.db`, backups, or extracted artifacts.
 
