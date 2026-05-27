@@ -13,8 +13,9 @@ src/index.tsx
           App
             Navigation
             Routes
-              "/"       -> <MainContent/>
-              "/pca-export" -> <PcaExportCompare/>
+              "/"       -> redirect to "/elizra"
+              "/elizra" -> <MainContent/>
+              "/pca"    -> <PcaExportCompare/>
               "/about"  -> <About/>
 ```
 
@@ -132,9 +133,9 @@ For each comma-separated part of the cell:
 - Writes the workbook with `ExcelJS`, cyan headers (`#B1F0F0`), bold size 8.43, thin borders.
 - Saves as `merged_tables.xlsx` via `file-saver`.
 
-## PCA Export pipeline (`/pca-export`)
+## PCA Export pipeline (`/pca`)
 
-This route is a separate workflow for the PCA Export workbook shape and does not change the legacy `/` pipeline.
+This route is a separate workflow for the PCA Export workbook shape and does not change the legacy Elizra (`/elizra`) pipeline.
 
 ### 1. Parse (`parsePcaWorkbook`)
 

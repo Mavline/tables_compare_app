@@ -268,7 +268,7 @@ const PcaExportCompare: React.FC = () => {
   return (
     <div className="App">
       <header className="App-header" style={{ boxSizing: 'border-box' }}>
-        <h1 style={{ margin: '0 0 24px', color: '#A78BFA' }}>PCA Export BOM Comparison</h1>
+        <h1 style={{ margin: '0 0 24px', color: '#A78BFA' }}>PCA BOM Comparison</h1>
 
         <section style={panelStyle}>
           <h2 style={{ color: '#7E57C2', margin: '0 0 15px', fontSize: '20px' }}>

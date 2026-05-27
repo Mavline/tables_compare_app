@@ -41,24 +41,24 @@ const Navigation: React.FC = () => {
         maxWidth: '1200px',
         margin: '0 auto'
       }}>
-        <Link 
-          to="/" 
+        <Link
+          to="/elizra"
           style={linkStyle}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          MAIN
+          Elizra
         </Link>
         <Link
-          to="/pca-export"
+          to="/pca"
           style={linkStyle}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          PCA EXPORT
+          PCA
         </Link>
-        <Link 
-          to="/about" 
+        <Link
+          to="/about"
           style={linkStyle}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}

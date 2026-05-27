@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import JSZip from 'jszip';
@@ -1370,8 +1370,9 @@ const App: React.FC = () => {
     <>
       <Navigation />
       <Routes>
-        <Route path="/" element={<MainContent />} />
-        <Route path="/pca-export" element={<PcaExportCompare />} />
+        <Route path="/" element={<Navigate to="/elizra" replace />} />
+        <Route path="/elizra" element={<MainContent />} />
+        <Route path="/pca" element={<PcaExportCompare />} />
         <Route path="/about" element={<About />} />
       </Routes>
     </>

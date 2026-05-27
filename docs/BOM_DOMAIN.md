@@ -60,7 +60,7 @@ Two BOMs may use different key names (`PN` vs `Part Number`); the user selects e
 
 ## PCA Export route
 
-`/pca-export` handles the PCA Export workbook shape separately from the legacy grouped BOM flow. The route expects normal workbook rows below a detected header row, typically on a sheet named `Bill of Materials`, and does not read Excel outline levels.
+`/pca` handles the PCA Export workbook shape separately from the legacy Elizra grouped BOM flow. The route expects normal workbook rows below a detected header row, typically on a sheet named `Bill of Materials`, and does not read Excel outline levels.
 
 Domain rules for this route:
 
