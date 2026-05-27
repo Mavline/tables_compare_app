@@ -4,7 +4,7 @@ Canonical, agent-independent rules for any coding agent working in this reposito
 
 The block between `AOC_SHARED_BEGIN` and `AOC_SHARED_END` is mirrored verbatim into `CLAUDE.md` and `AGENTS.md`. The three copies must match byte for byte and the declared block hash must match the content. Run `bash scripts/check-agent-docs.sh` before any spec freeze, implementation, review, fixer pass, or approval.
 
-<!-- AOC_SHARED_BEGIN sha256:bb8da73263fa8b3f9080aae719ad3153dcf185aeb79e168c8b0f498387f52cc3 -->
+<!-- AOC_SHARED_BEGIN sha256:2bbc054fab40f9506afdd288e68aed2b38da072725a715b57ee7df45575a1530 -->
 
 This Shared Agent Operating Contract (AOC) is binding for Claude, Codex, and any future coding agent working in this repository. Agent-specific sections may add tool mechanics, but they must not weaken, override, rename, or reinterpret these AOC rules.
 
@@ -49,7 +49,7 @@ For every non-trivial task the lead orchestrator must:
 5. run the red-team spec gate under `AOC-SPEC-002` before implementation when a frozen spec is required;
 6. implement the smallest safe change set per logical task; when subagents are used, run exactly one builder per logical task;
 7. run required verification before reviewer handoff (see `AOC-VERIFY-001` and `AOC-VERIFY-002`);
-8. run exactly one fresh adversarial reviewer when scope warrants review;
+8. obtain exactly one fresh adversarial reviewer when scope warrants review without violating `AOC-REVIEW-003`;
 9. if review returns `FAIL` or `UNKNOWN`, run exactly one fixer under `AOC-FIX-001`;
 10. rerun impacted verification before a fresh reviewer rechecks the fixer output;
 11. repeat review/fix only until every criterion is `PASS` or report a blocker;
@@ -129,6 +129,10 @@ Reviewer verdicts use only `PASS`, `FAIL`, or `UNKNOWN` per acceptance criterion
 ### AOC-REVIEW-002: Fresh Adversarial Reviewer
 
 A reviewer that is invoked must be a fresh session, must not modify production code, and must judge against this AOC rather than agent-specific file names. Before review, the reviewer reruns or independently verifies `AOC-DOCS-001`. For every acceptance criterion the reviewer restates the production execution model, lists concrete failure scenarios, verifies evidence for each, verifies that tests match the production model, cites AOC rule IDs, and assigns `PASS`, `FAIL`, or `UNKNOWN`.
+
+### AOC-REVIEW-003: No Agent-Initiated Claude Invocation
+
+Claude, Claude Code, and Anthropic CLI sessions are peer orchestrators only when started by the user. Codex and other non-Claude agents must not launch, script, call, or delegate to Claude, Claude Code, Anthropic CLI, Claude reviewer tools, or Claude rework tools. If Claude review is useful or required, the agent must ask the user to hand the task to Claude and wait for user-provided results, or record reviewer handoff as blocked/`UNKNOWN` if the user does not provide it. This rule does not prevent a user-started Claude session from working directly in the repo as lead orchestrator under this AOC.
 
 ### AOC-FIX-001: Fixer Scope
 

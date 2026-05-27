@@ -30,7 +30,7 @@ The lead orchestrator must:
 6. Run the red-team spec gate required by `AOC-SPEC-002` when a frozen spec is required.
 7. Implement the smallest safe change set for each logical task.
 8. Run required verification before reviewer handoff. UI and Excel-pipeline changes require real browser verification and synthetic `.xlsx` fixtures unless impossible; impossible tests must be documented with the blocker, residual risk, and manual-test recipe.
-9. Run a fresh reviewer when scope warrants review.
+9. Obtain a fresh reviewer when scope warrants review. Codex must not invoke Claude, Claude Code, Anthropic CLI, or Claude reviewer/rework tools; if Claude review is desired, ask the user to hand the task to Claude and wait for the user-provided result.
 10. Require reviewer output to judge every acceptance criterion as `PASS`, `FAIL`, or `UNKNOWN`.
 11. If any criterion is not `PASS`, run exactly one fixer, then rerun impacted verification before a fresh verifier pass.
 12. Repeat only until `PASS` or report a blocker.
@@ -78,6 +78,7 @@ Reviewer:
 
 - must be a fresh session;
 - must not modify production code;
+- must be started through an allowed path; Codex may not spawn Claude or Anthropic tooling as the reviewer;
 - must verify Stage 0 control-document parity before review;
 - must review against the Shared Agent Operating Contract and cite AOC rule IDs;
 - checks actual repo state, not builder narrative;
