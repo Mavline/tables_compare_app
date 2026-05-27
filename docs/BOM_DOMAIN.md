@@ -68,10 +68,10 @@ Domain rules for this route:
 - The user chooses the sheet to compare for each uploaded workbook before common columns are derived.
 - The `#` column may represent order in the source workbook, but the app does not infer hierarchy from it and does not compare it.
 - The selected key field is used only for matching and is not compared as a data field.
-- Quantity and description columns are retained as report context when present, even when unchanged. Their `Diff` columns are emitted only when those fields have changes in the result.
+- Quantity and description columns are retained as report context when present, even when unchanged. Quantity can still emit `Old`, `New`, and `Diff`; description is always one context column and never emits `Old`, `New`, or `Diff`.
 - The comparison uses the same broad merge principle as `mergeTables`: key maps plus a positional pass, with right-only rows inserted during that pass.
 - Selected field values are compared after range-aware normalization, so `R1-R3` can compare equal to `R1 R2 R3`.
-- Export is a wide row-per-BOM-item table. Changed field groups are emitted as `Old`, `New`, and `Diff`; Ref Des `Old`/`New` cells contain only removed/added designators rather than the full shared list.
+- Export is a wide row-per-BOM-item table. Changed field groups are emitted as `Old`, `New`, and `Diff`; Ref Des `Old`/`New` cells contain only removed/added designators rather than the full shared list. The single description value is taken from old first, then new when old is empty, and does not create a difference row by itself.
 
 ## Description field detection
 

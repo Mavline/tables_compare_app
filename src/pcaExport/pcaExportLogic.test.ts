@@ -83,7 +83,7 @@ describe('comparePcaRows', () => {
     { '#': '9.3', 'Part Number': 'P3', Description: 'Added', Quantity: '1', 'Ref Des': 'C1' },
   ];
 
-  it('compares only selected fields and ignores unselected # changes', () => {
+  it('does not treat description-only context changes as report differences', () => {
     const result = comparePcaRows({
       leftRows,
       rightRows,
@@ -91,9 +91,7 @@ describe('comparePcaRows', () => {
       selectedFields: ['Description'],
     });
 
-    expect(result.rows).toEqual([
-      expect.objectContaining({ key: 'P3', status: 'added' }),
-    ]);
+    expect(result.rows).toEqual([]);
   });
 
   it('includes changed and right-only rows for selected fields', () => {
@@ -202,20 +200,45 @@ describe('createPcaReportTable', () => {
     expect(report.rows).toHaveLength(1);
     expect(report.columns.map(column => column.header)).toEqual([
       'Part Number',
-      'Description Old',
-      'Description New',
+      'Description',
       'Qty Old',
       'Qty New',
       'Qty Diff',
     ]);
     expect(report.rows[0]).toEqual({
       key: 'P2',
-      field_0_old: 'Same',
-      field_0_new: 'Same',
+      field_0_value: 'Same',
       field_1_old: '3',
       field_1_new: '4',
       field_1_diff: 1,
     });
+  });
+
+  it('uses one description column from old first, then new when old is empty', () => {
+    const comparison = comparePcaRows({
+      leftRows: [
+        { 'Part Number': 'P1', Description: '', Quantity: '1' },
+        { 'Part Number': 'P2', Description: 'Old description wins', Quantity: '1' },
+      ],
+      rightRows: [
+        { 'Part Number': 'P1', Description: 'Filled from new', Quantity: '2' },
+        { 'Part Number': 'P2', Description: 'Different new description', Quantity: '2' },
+      ],
+      keyField: 'Part Number',
+      selectedFields: ['Description', 'Quantity'],
+    });
+
+    const report = createPcaReportTable(comparison);
+
+    expect(report.columns.map(column => column.header)).toEqual([
+      'Part Number',
+      'Description',
+      'Qty Old',
+      'Qty New',
+      'Qty Diff',
+    ]);
+    expect(report.rows[0].field_0_value).toBe('Filled from new');
+    expect(report.rows[1].field_0_value).toBe('Old description wins');
   });
 
   it('shows only Ref Des added and removed items in Old and New columns', () => {
@@ -264,19 +287,17 @@ describe('createPcaExportWorkbook', () => {
     expect(rows).toHaveLength(1);
     expect(Object.keys(rows[0])).toEqual([
       'Part Number',
+      'Description',
       'Qty Old',
       'Qty New',
       'Qty Diff',
-      'Description Old',
-      'Description New',
     ]);
     expect(rows[0]).toEqual({
       'Part Number': 'P2',
+      Description: 'Same',
       'Qty Old': '2',
       'Qty New': '3',
       'Qty Diff': 1,
-      'Description Old': 'Same',
-      'Description New': 'Same',
     });
   });
 });

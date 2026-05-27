@@ -218,9 +218,9 @@ export const comparePcaRows = ({
         const rightRow = rightByKey.get(key);
         const values = buildComparisonValues(leftRow, rightRow, fieldsToCompare);
 
-        if (!rightRow) {
+        if (!rightRow && hasDiffDrivingChange(values)) {
           resultRows.push({ key, status: 'removed', values });
-        } else if (Object.values(values).some(value => value.changed)) {
+        } else if (hasDiffDrivingChange(values)) {
           resultRows.push({ key, status: 'changed', values });
         }
       }
@@ -229,11 +229,14 @@ export const comparePcaRows = ({
     if (rightRowAtPosition) {
       const key = stringifyCell(rightRowAtPosition[keyField]);
       if (key && !leftByKey.has(key)) {
-        resultRows.push({
-          key,
-          status: 'added',
-          values: buildComparisonValues(undefined, rightRowAtPosition, fieldsToCompare),
-        });
+        const values = buildComparisonValues(undefined, rightRowAtPosition, fieldsToCompare);
+        if (hasDiffDrivingChange(values)) {
+          resultRows.push({
+            key,
+            status: 'added',
+            values,
+          });
+        }
       }
     }
   }
@@ -258,6 +261,9 @@ const buildComparisonValues = (
     return values;
   }, {});
 };
+
+const hasDiffDrivingChange = (values: Record<string, PcaComparisonValue>): boolean =>
+  Object.entries(values).some(([field, value]) => !isDescriptionField(field) && value.changed);
 
 export const isQuantityField = (field: string): boolean => {
   const normalized = normalizeHeader(field);
@@ -295,6 +301,9 @@ const numberOrZero = (value: string): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const descriptionReportValue = (value: PcaComparisonValue): string =>
+  value.left || value.right;
+
 const quantityDiff = (left: string, right: string): string | number => {
   const leftNumber = numberOrZero(left);
   const rightNumber = numberOrZero(right);
@@ -312,12 +321,17 @@ const tokenDifference = (source: string[], comparison: string[]): string =>
   source.filter(item => !comparison.includes(item)).join(', ');
 
 const hasFieldChange = (comparison: PcaComparisonResult, field: string): boolean =>
-  comparison.rows.some(row => row.values[field]?.changed);
+  !isDescriptionField(field) && comparison.rows.some(row => row.values[field]?.changed);
 
-const reportFields = (comparison: PcaComparisonResult): string[] =>
-  comparison.selectedFields.filter(field =>
+const reportFields = (comparison: PcaComparisonResult): string[] => {
+  const fields = comparison.selectedFields.filter(field =>
     isPcaReportContextField(field) || hasFieldChange(comparison, field)
   );
+  return [
+    ...fields.filter(isDescriptionField),
+    ...fields.filter(field => !isDescriptionField(field)),
+  ];
+};
 
 const diffValue = (
   field: string,
@@ -379,6 +393,11 @@ export const createPcaReportTable = (comparison: PcaComparisonResult): PcaReport
     const label = reportFieldLabel(field);
     const includeDiff = hasFieldChange(comparison, field);
 
+    if (isDescriptionField(field)) {
+      columns.push({ header: 'Description', key: `field_${index}_value`, width: 36 });
+      return;
+    }
+
     columns.push(
       { header: `${label} Old`, key: `field_${index}_old`, width: isRefDesField(field) ? 48 : 16 },
       { header: `${label} New`, key: `field_${index}_new`, width: isRefDesField(field) ? 48 : 16 }
@@ -390,12 +409,18 @@ export const createPcaReportTable = (comparison: PcaComparisonResult): PcaReport
   });
 
   const rows = comparison.rows
-    .filter(row => comparison.selectedFields.some(field => row.values[field]?.changed))
+    .filter(row => hasDiffDrivingChange(row.values))
     .map(row => {
       const reportRow: Record<string, string | number> = { key: row.key };
 
       fieldsToReport.forEach((field, index) => {
         const value = row.values[field] || { left: '', right: '', changed: false };
+
+        if (isDescriptionField(field)) {
+          reportRow[`field_${index}_value`] = descriptionReportValue(value);
+          return;
+        }
+
         reportRow[`field_${index}_old`] = oldNewReportValue(field, value, 'old');
         reportRow[`field_${index}_new`] = oldNewReportValue(field, value, 'new');
 

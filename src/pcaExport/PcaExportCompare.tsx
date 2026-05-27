@@ -177,7 +177,7 @@ const PcaExportCompare: React.FC = () => {
   );
 
   const comparisonFields = useMemo(
-    () => Array.from(new Set([...selectedFields, ...alwaysIncludedFields])),
+    () => Array.from(new Set([...alwaysIncludedFields, ...selectedFields])),
     [alwaysIncludedFields, selectedFields]
   );
 

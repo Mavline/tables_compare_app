@@ -159,7 +159,7 @@ This route is a separate workflow for the AST/PCA Export workbook shape and does
 
 - Builds left and right key maps.
 - Iterates by position from `0` to `max(left.length, right.length) - 1`, matching left rows by key against the right map and inserting right-only rows during the same positional pass.
-- Filters out rows where every selected field is equal after range-aware normalization.
+- Filters out rows where every selected diff-driving field is equal after range-aware normalization. `Description` is report context only and does not create a difference row by itself.
 - Preserves the visible statuses `changed`, `added`, and `removed`.
 
 ### 4. Range-aware value normalization
@@ -169,8 +169,8 @@ This route is a separate workflow for the AST/PCA Export workbook shape and does
 ### 5. Export (`createPcaExportWorkbook`)
 
 - Writes a wide `AST Comparison` workbook with one row per BOM item that has at least one selected-field difference.
-- Uses the selected key field, then field groups such as `Qty Old`, `Qty New`, `Qty Diff`.
-- Emits `Diff` only for fields that changed somewhere in the result. Quantity and description can remain as context columns without a `Diff` column when unchanged.
+- Uses the selected key field, one `Description` context column when present, then field groups such as `Qty Old`, `Qty New`, `Qty Diff`.
+- Emits `Diff` only for fields that changed somewhere in the result. `Description` never emits `Old`, `New`, or `Diff`; its single value is taken from old first, then new when old is empty.
 - For Ref Des fields, `Old` and `New` contain only removed and added designators respectively; shared designators are not repeated.
 - Uses the same cyan header fill and thin borders expected from the existing Excel outputs.
 
