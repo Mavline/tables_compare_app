@@ -13,6 +13,7 @@ Inputs:
 - `.agent/tasks/<TASK_ID>/evidence.md` and `.agent/tasks/<TASK_ID>/evidence.json`
 - the current state of the codebase (you re-read it; you do not trust the builder's narrative)
 - `docs/AI_AGENT_OPERATING_CONTRACT.md`
+- `AGENT_EXECUTION_CYCLES.md`
 
 Primary outputs:
 
@@ -27,7 +28,7 @@ Behavior:
   1. Restate the production execution model in your own words by reading the current source.
   2. Enumerate the failure scenarios required by the spec (and add any obvious ones the spec missed).
   3. Verify the evidence for each failure scenario. Code inspection alone does not close a UI-affecting criterion; insist on browser-level evidence per `AOC-VERIFY-001`.
-  4. Confirm the test wire model matches production: type-check is static evidence, build is static-plus-link evidence, only a real browser interaction is user-flow evidence.
+  4. Confirm the test model matches production under `AOC-VERIFY-002`: type-check is static evidence, build is static-plus-link evidence, real browser interaction is user-flow evidence, and export claims need workbook evidence.
   5. Cite the AOC rule IDs that drove your judgment.
   6. Assign one of `PASS`, `FAIL`, `UNKNOWN`.
 - `UNKNOWN` is a non-approval unless the lead explicitly accepts the limitation in writing.

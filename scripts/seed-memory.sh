@@ -74,13 +74,16 @@ DELETE FROM objects WHERE id IN (
   SELECT object_id FROM policies
    WHERE policy_name IN (
      'aoc-shared-block-parity', 'verify-in-browser-for-ui-changes',
-     'memory-write-discipline', 'no-customer-bom-data', 'task-proof-loop'
+     'source-document-consistency', 'red-team-spec-gate',
+     'production-model-verification', 'memory-write-discipline',
+     'no-customer-bom-data', 'task-proof-loop'
    )
   UNION ALL
   SELECT object_id FROM decisions
    WHERE title IN (
      'Adopt repo-local memory.db via memgraph plugin',
      'Mirror Doc_generating AOC discipline into a tailored v1',
+     'Harden AOC with hash parity and production-model verification',
      'Keep merge contract: positional iteration + key match + filter on byte-equal pairs',
      'Strip orphan config files and unused UI scaffolding',
      'Fix App.tsx eslint warnings without altering merge semantics'
@@ -112,6 +115,7 @@ SQL
 SOURCE_FILE_AOC="docs/AI_AGENT_OPERATING_CONTRACT.md"
 SOURCE_FILE_MEM="MEMORY_WRITE_RULES.md"
 SOURCE_FILE_CLAUDE="CLAUDE.md"
+SOURCE_FILE_CYCLES="AGENT_EXECUTION_CYCLES.md"
 
 write_entity() {
   "$MG" write-entity --type "$1" --name "$2" --display "$3" --aliases "$4" --summary "$5" >/dev/null
@@ -153,23 +157,32 @@ write_entity tool "memgraph_memory_codex" "Memgraph memory plugin (Codex)" \
   '["memgraph","memory-graph"]' \
   "Repo-local memory CLI bootstrapped from sibling Doc_generating project. Home install at ~/.codex/skills/memory-graph/."
 
-# ----- Policies (5) -----------------------------------------------------------
+# ----- Policies (8) -----------------------------------------------------------
 write_policy "aoc-shared-block-parity" "orchestration" "$SOURCE_FILE_AOC" \
-"AOC-DOCS-001. The shared AOC block in CLAUDE.md, AGENTS.md, and docs/AI_AGENT_OPERATING_CONTRACT.md must be byte-identical. Run bash scripts/check-agent-docs.sh before any spec freeze, implementation, review, fixer pass, or approval. Parity failure blocks the task with DOCS_PARITY_FAIL."
+"AOC-DOCS-001. The shared AOC block in CLAUDE.md, AGENTS.md, and docs/AI_AGENT_OPERATING_CONTRACT.md must be byte-identical, and the AOC_SHARED_BEGIN marker must declare the SHA-256 of the shared block body. Run bash scripts/check-agent-docs.sh before any spec freeze, implementation, review, fixer pass, or approval. Parity or hash failure blocks the task with DOCS_PARITY_FAIL."
+
+write_policy "source-document-consistency" "orchestration" "$SOURCE_FILE_AOC" \
+"AOC-DOCS-002. Instruction and source-of-truth changes must update every authoritative surface that depends on the same rule: docs/AI_AGENT_OPERATING_CONTRACT.md, AGENTS.md, CLAUDE.md, AGENT_EXECUTION_CYCLES.md when present, role-agent prompts, MEMORY_WRITE_RULES.md, and validation scripts. Reuse neighboring project process discipline only after rewriting it for table_compare BOM scope."
 
 write_policy "verify-in-browser-for-ui-changes" "execution" "$SOURCE_FILE_AOC" \
-"AOC-VERIFY-001. Any change to file upload, sheet selection, mapping, merge, reference-designator expansion, hierarchy preservation, or exported workbook must be exercised in a real browser with synthetic fixtures before reviewer handoff. tsc --noEmit and npm run build are necessary but not sufficient evidence."
+"AOC-VERIFY-001. Any change to file upload, sheet selection, mapping, merge, reference-designator expansion, hierarchy preservation, preview table, or exported workbook must be exercised in a real browser with synthetic fixtures before reviewer handoff. tsc --noEmit and npm run build are necessary but not sufficient evidence."
+
+write_policy "red-team-spec-gate" "execution" "$SOURCE_FILE_AOC" \
+"AOC-SPEC-002. Before implementation starts on a frozen spec, adversarially review how the implementation could appear to pass while violating BOM merge contract, positional row order, key matching, reference-designator expansion, hierarchy preservation, selected-sheet behavior, description detection, export column order, export styling, sensitive-data boundary, or user-visible workflow."
+
+write_policy "production-model-verification" "execution" "$SOURCE_FILE_AOC" \
+"AOC-VERIFY-002. Tests and smoke checks must match the production execution model. Helper-level tests can support evidence, but browser-only BOM workflow claims need UI or equivalent harness evidence, and exported-workbook claims require inspecting the generated .xlsx structure or visible workbook result."
 
 write_policy "memory-write-discipline" "memory" "$SOURCE_FILE_MEM" \
 "AOC-MEM-001. Never hand-edit objects, index_docs, memory_vec, or embedding_meta. Use the memgraph CLI for durable writes. scripts/seed-memory.sh now uses the CLI as well; only orphan-row cleanup happens via direct SQL. Never commit .agent/."
 
 write_policy "no-customer-bom-data" "repo" "$SOURCE_FILE_AOC" \
-"AOC-DATA-001. Customer BOMs may contain part numbers, prices, suppliers, and internal identifiers. Never log full row contents, paste customer files into memory, or commit them. Use synthetic fixtures under fixtures/."
+"AOC-DATA-001. Customer BOMs may contain part numbers, prices, suppliers, and internal identifiers. Never log full row contents, paste customer files into memory, commits, source docs, or shared logs. Use synthetic fixtures under fixtures/."
 
-write_policy "task-proof-loop" "execution" "$SOURCE_FILE_CLAUDE" \
-"For non-trivial work, freeze .agent/tasks/<TASK_ID>/spec.md with AC1..ACn before implementation. Build → evidence → fresh verifier → fixer if needed. Do not claim completion until every criterion is PASS. Fixers make the smallest defensible diff."
+write_policy "task-proof-loop" "execution" "$SOURCE_FILE_CYCLES" \
+"For substantial features, refactors, bug fixes, and instruction/process changes, freeze .agent/tasks/<TASK_ID>/spec.md with AC1..ACn before implementation. Build evidence, run fresh verifier, run a scoped fixer if needed, and keep execution artifacts under .agent/tasks rather than source docs. Do not claim completion until every criterion is PASS or a limitation is explicitly accepted."
 
-# ----- Decisions (3) ----------------------------------------------------------
+# ----- Decisions (6) ----------------------------------------------------------
 write_decision \
 "Adopt repo-local memory.db via memgraph plugin" \
 "Use .agent/memory.db with the v1 memory-graph schema as the project memory layer." \
@@ -179,10 +192,17 @@ write_decision \
 
 write_decision \
 "Mirror Doc_generating AOC discipline into a tailored v1" \
-"Import the AOC discipline (parity, evidence-first, fresh reviewer, fixer scope) but drop Doc_generating-specific rules (Stripe, RLS, Supabase, CraftedTerms branding)." \
-"CLAUDE.md, AGENTS.md, and docs/AI_AGENT_OPERATING_CONTRACT.md carry the same v1 AOC block. The block focuses on type-check, build, and real-browser verification because the project has no backend. AOC-DATA-001 replaces the legal/payment rules with a customer-BOM confidentiality rule." \
+"Import the AOC discipline (parity, evidence-first, fresh reviewer, fixer scope, red-team spec gate, production-model verification) but drop Doc_generating-specific rules (Stripe, RLS, Supabase, CraftedTerms branding)." \
+"CLAUDE.md, AGENTS.md, and docs/AI_AGENT_OPERATING_CONTRACT.md carry the same AOC block. The block focuses on type-check, build, and real-browser/workbook verification because the project has no backend. AOC-DATA-001 replaces the legal/payment rules with a customer-BOM confidentiality rule." \
 "The project is one React page; the full Doc_generating ruleset would be heavyweight ceremony. Browser verification is the only meaningful evidence here." \
-"check-agent-docs.sh is now the parity gate. Adding rules requires updating all three copies and bumping the version label in the BEGIN/END markers."
+"check-agent-docs.sh is now the parity and declared-hash gate. Adding rules requires updating all three copies and the AOC_SHARED_BEGIN hash."
+
+write_decision \
+"Harden AOC with hash parity and production-model verification" \
+"2026-05-27 docs hardening added hash-validated AOC parity, source-document consistency, red-team spec gate, production-model verification, and a dedicated AGENT_EXECUTION_CYCLES.md playbook." \
+"Keep Doc_generating's mature process discipline where it protects this repo: hash parity for shared AOC, source-doc consistency across control docs and role prompts, red-team spec review before implementation, and evidence that matches the browser-only Excel production model. Do not import Doc_generating's product-specific payment/auth/legal/deployment rules." \
+"The user asked to take the missing documentation discipline from neighboring Doc_generating. table_compare needs the process controls, but its product is a browser-only BOM comparator with sensitive Excel data rather than a Supabase/Stripe document service." \
+"Future instruction edits must touch the AOC mirror, AGENT_EXECUTION_CYCLES.md, role-agent prompts, MEMORY_WRITE_RULES.md, and validation scripts when the same rule applies. Seed memory must be rerun after such changes so DB policies match the docs."
 
 write_decision \
 "Keep merge contract: positional iteration + key match + filter on byte-equal pairs" \
@@ -205,7 +225,7 @@ write_decision \
 "Treating warnings as errors is the default on most CI providers. The repository was failing CI=true build before this fix. Keeping warnings around long-term erodes the lint signal." \
 "If anyone re-introduces fieldMappingDict for a real use, they must also re-introduce its consumer in the same commit so the unused-vars rule does not re-trigger."
 
-# ----- Claims (13) ------------------------------------------------------------
+# ----- Claims (11) ------------------------------------------------------------
 write_claim gotcha \
 "src/.cursorrules describes a Vue/Pinia/Vite/Hono/Drizzle stack. The actual stack is React + CRA + react-scripts + ExcelJS/SheetJS. The file was removed in commit 4007578, but historical references in older commits or memory may still cite it." \
 "table_compare" "invalidated"

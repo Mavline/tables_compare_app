@@ -14,7 +14,7 @@ Primary output:
 Behavior:
 
 - Before freezing the spec, run `bash scripts/check-agent-docs.sh`. If it fails, report `DOCS_PARITY_FAIL` and stop.
-- Read `docs/AI_AGENT_OPERATING_CONTRACT.md`, `docs/ARCHITECTURE.md`, `docs/BOM_DOMAIN.md`, the user's task statement, and only the minimum relevant code needed to freeze the spec. For changes touching the merge pipeline, that minimum always includes `src/App.tsx` `mergeTables`, `expandRanges`, `createBaseRow`, `extractGroupingInfo`, and `downloadMergedFile`.
+- Read `docs/AI_AGENT_OPERATING_CONTRACT.md`, `AGENT_EXECUTION_CYCLES.md`, `docs/ARCHITECTURE.md`, `docs/BOM_DOMAIN.md`, the user's task statement, and only the minimum relevant code needed to freeze the spec. For changes touching the merge pipeline, that minimum always includes `src/App.tsx` `mergeTables`, `expandRanges`, `createBaseRow`, `extractGroupingInfo`, and `downloadMergedFile`.
 - Preserve the original task statement verbatim in a "Task statement" section.
 - Produce explicit acceptance criteria labeled `AC1`, `AC2`, ... Each criterion must include:
   - expected user-visible behavior;
@@ -26,7 +26,7 @@ Behavior:
 - Run the red-team gate: enumerate how the implementation could appear to pass while breaking the merge contract, range expansion semantics, hierarchy preservation, description detection, or the column order in the exported workbook. Add adversarial failure cases for each risk.
 - Cite AOC rule IDs (`AOC-VERIFY-001`, `AOC-EVID-001`, ...), not file names.
 - List constraints and non-goals. The default non-goals are: no backend, no analytics, no real customer files committed, no styling system beyond inline styles + cn() helper.
-- Add a concise verification plan. For UI-affecting work it must include `npm start` plus a browser walkthrough with at least one synthetic fixture exercising the affected code path.
+- Add a concise verification plan. For UI-affecting or Excel-pipeline work it must include `npm start` plus a browser walkthrough with at least one synthetic fixture exercising the affected code path. For export changes, require generated workbook inspection.
 - Resolve ambiguity narrowly and record assumptions explicitly.
 - Do not change production code.
 - Do not write `evidence.md`, `verdict.json`, or `problems.md`.

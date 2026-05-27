@@ -6,7 +6,7 @@ This repository uses `.agent/memory.db` as the project's long-term memory. The s
 
 1. `docs/AI_AGENT_OPERATING_CONTRACT.md` (specifically `AOC-MEM-001`).
 2. The Codex memory-graph plugin contract at `~/.codex/skills/memory-graph/SKILL.md`.
-3. Project-local rules in `AGENTS.md` and `CLAUDE.md`.
+3. Project-local rules in `AGENTS.md`, `CLAUDE.md`, and `AGENT_EXECUTION_CYCLES.md`.
 4. Durable policies, decisions, and claims already written into `.agent/memory.db`.
 
 If the database and a markdown note disagree, the database wins. Reconcile through `memgraph` rather than silently trusting the note.
@@ -48,6 +48,8 @@ Every durable write must go through the `memgraph` CLI so the typed table, FTS i
 | Relationship between durable records                  | `memgraph write-relation`                                          |
 
 Workflow records (`open-wf`, `open-run`, `close-run`, …) are available but should only be opened when this project explicitly adopts multi-agent orchestration. For one-off tasks, use `.agent/tasks/<TASK_ID>/` files instead of run/tranche objects.
+
+Task artifacts (`spec.md`, `evidence.md`, `evidence.json`, raw screenshots/workbooks, `verdict.json`, and `problems.md`) are execution proof, not durable source docs. Keep them under `.agent/tasks/<TASK_ID>/`, never commit them, and only promote stable reusable lessons into memory through the CLI.
 
 ## Scripted seeding
 
