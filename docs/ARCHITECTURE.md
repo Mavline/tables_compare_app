@@ -13,9 +13,11 @@ src/index.tsx
           App
             Navigation
             Routes
-              "/"       -> redirect to "/elizra"
-              "/elizra" -> <MainContent/>
-              "/pca"    -> <PcaExportCompare/>
+              "/"       -> redirect to "/elisra"
+              "/elisra" -> <MainContent/>
+              "/elizra" -> redirect to "/elisra"
+              "/ast"    -> <PcaExportCompare/>
+              "/pca"    -> redirect to "/ast"
               "/about"  -> <About/>
 ```
 
@@ -43,7 +45,7 @@ Almost all state lives inside `MainContent` (`src/App.tsx`), keyed by file or by
 
 `TableContext` (`src/context/TableContext.tsx`) only holds `mergedData`. It exists so future routes can read the merge without going back to the upload page. The preview table itself reads `mergedPreview`, not the context value.
 
-`PcaExportCompare` (`src/pcaExport/PcaExportCompare.tsx`) is intentionally isolated from `MainContent`. It owns its own two upload slots, parsed PCA rows, manually selected key field, manually selected comparison fields, preview rows, and export action. It does not read or mutate `TableContext`, `fieldMappings`, `groupingStructure`, or the legacy RefDes selector state.
+`PcaExportCompare` (`src/pcaExport/PcaExportCompare.tsx`) is intentionally isolated from `MainContent`. It owns its own two upload slots, selected workbook sheets, parsed AST/PCA rows, manually selected key field, manually selected comparison fields, preview rows, and export action. It does not read or mutate `TableContext`, `fieldMappings`, `groupingStructure`, or the legacy RefDes selector state.
 
 ## MainContent pipeline
 
@@ -133,14 +135,15 @@ For each comma-separated part of the cell:
 - Writes the workbook with `ExcelJS`, cyan headers (`#B1F0F0`), bold size 8.43, thin borders.
 - Saves as `merged_tables.xlsx` via `file-saver`.
 
-## PCA Export pipeline (`/pca`)
+## AST Export pipeline (`/ast`)
 
-This route is a separate workflow for the PCA Export workbook shape and does not change the legacy Elizra (`/elizra`) pipeline.
+This route is a separate workflow for the AST/PCA Export workbook shape and does not change the legacy Elisra (`/elisra`) pipeline. `/pca` is kept only as a redirect to `/ast`.
 
 ### 1. Parse (`parsePcaWorkbook`)
 
 - Reads the workbook with SheetJS.
-- Prefers the `Bill of Materials` sheet when present, otherwise falls back to the first sheet.
+- Lists all workbook sheets after upload and lets the user choose the active sheet for each side.
+- Prefers the `Bill of Materials` sheet when present, otherwise falls back to the first sheet before the user changes it.
 - Scans the first 50 rows and uses the most text-heavy row as the header row, which handles the PCA title row above the column headers.
 - Deduplicates blank or repeated headers and parses all data rows below the detected header.
 
@@ -148,7 +151,8 @@ This route is a separate workflow for the PCA Export workbook shape and does not
 
 - The user chooses one key field from the common headers of both files.
 - The user chooses which common fields to compare.
-- The `#` column is not special-cased. It is compared only if the user selects it.
+- The `#` column and selected key field are excluded from comparison.
+- Quantity and description columns are automatically retained as report context when present.
 - No outline or hierarchy columns are produced for this route.
 
 ### 3. Compare (`comparePcaRows`)
@@ -164,8 +168,10 @@ This route is a separate workflow for the PCA Export workbook shape and does not
 
 ### 5. Export (`createPcaExportWorkbook`)
 
-- Writes a flat `PCA Comparison` workbook with one row per changed selected field.
-- Uses `Status`, `Key`, `Field`, and the two source file names as headers.
+- Writes a wide `AST Comparison` workbook with one row per BOM item that has at least one selected-field difference.
+- Uses the selected key field, then field groups such as `Qty Old`, `Qty New`, `Qty Diff`.
+- Emits `Diff` only for fields that changed somewhere in the result. Quantity and description can remain as context columns without a `Diff` column when unchanged.
+- For Ref Des fields, `Old` and `New` contain only removed and added designators respectively; shared designators are not repeated.
 - Uses the same cyan header fill and thin borders expected from the existing Excel outputs.
 
 ## File layout
@@ -179,7 +185,7 @@ src/
 ├── context/
 │   └── TableContext.tsx      # mergedData provider
 ├── components/
-│   ├── Navigation.tsx        # fixed top bar with main, PCA export, and about links
+│   ├── Navigation.tsx        # fixed top bar with Elisra, AST, and about links
 │   ├── About.tsx             # static page
 │   └── ui/                   # primitive wrappers (Radix labels, Tailwind-ish classes)
 │       ├── alert.tsx
@@ -191,8 +197,8 @@ src/
 ├── lib/
 │   └── utils.ts              # cn() helper using clsx + tailwind-merge
 └── pcaExport/
-    ├── PcaExportCompare.tsx  # isolated PCA Export route UI
-    ├── pcaExportLogic.ts     # PCA parser, comparator, range normalization, export
+    ├── PcaExportCompare.tsx  # isolated AST Export route UI
+    ├── pcaExportLogic.ts     # AST/PCA parser, comparator, range normalization, export
     └── pcaExportLogic.test.ts
 ```
 

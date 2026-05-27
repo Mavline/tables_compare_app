@@ -63,6 +63,9 @@ export const isPcaComparableField = (field: string, keyField: string): boolean =
   return normalizeHeader(trimmedField) !== normalizeHeader(keyField);
 };
 
+const findPreferredSheetName = (sheetNames: string[]): string | undefined =>
+  sheetNames.includes(preferredSheetName) ? preferredSheetName : sheetNames[0];
+
 const countSignificantCells = (row: PcaCellValue[]): number =>
   row.filter(cell => {
     if (cell === null || cell === undefined) return false;
@@ -93,15 +96,25 @@ const findHeaderRowIndex = (rows: PcaCellValue[][]): number => {
   return bestIndex;
 };
 
-export const parsePcaWorkbook = (input: ArrayBuffer): ParsedPcaWorkbook => {
+export const getPcaWorkbookSheetNames = (input: ArrayBuffer): string[] => {
   const workbook = XLSX.read(input, { type: 'array', cellDates: true, raw: true });
-  const sheetName = workbook.SheetNames.includes(preferredSheetName)
-    ? preferredSheetName
-    : workbook.SheetNames[0];
+  return workbook.SheetNames;
+};
+
+export const parsePcaWorkbook = (input: ArrayBuffer, requestedSheetName?: string): ParsedPcaWorkbook => {
+  const workbook = XLSX.read(input, { type: 'array', cellDates: true, raw: true });
+  const sheetName = requestedSheetName && workbook.SheetNames.includes(requestedSheetName)
+    ? requestedSheetName
+    : findPreferredSheetName(workbook.SheetNames);
+
+  if (!sheetName) {
+    throw new Error('No worksheet found in AST workbook.');
+  }
+
   const worksheet = workbook.Sheets[sheetName];
 
   if (!worksheet) {
-    throw new Error('No worksheet found in PCA workbook.');
+    throw new Error('No worksheet found in AST workbook.');
   }
 
   const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
@@ -246,7 +259,7 @@ const buildComparisonValues = (
   }, {});
 };
 
-const isQuantityField = (field: string): boolean => {
+export const isQuantityField = (field: string): boolean => {
   const normalized = normalizeHeader(field);
   return normalized === 'quantity' || normalized === 'qty';
 };
@@ -255,6 +268,20 @@ const isRefDesField = (field: string): boolean => {
   const normalized = normalizeHeader(field);
   return normalized === 'refdes' || normalized === 'referencedesignator' || normalized === 'referencedesignators';
 };
+
+export const isDescriptionField = (field: string): boolean => {
+  const normalized = normalizeHeader(field);
+  return [
+    'description',
+    'desc',
+    'itemdescription',
+    'componentdescription',
+    'partdescription',
+  ].includes(normalized);
+};
+
+export const isPcaReportContextField = (field: string): boolean =>
+  isQuantityField(field) || isDescriptionField(field);
 
 const reportFieldLabel = (field: string): string => {
   if (isQuantityField(field)) return 'Qty';
@@ -284,9 +311,12 @@ const rangeAwareTokens = (value: PcaCellValue): string[] =>
 const tokenDifference = (source: string[], comparison: string[]): string =>
   source.filter(item => !comparison.includes(item)).join(', ');
 
-const changedReportFields = (comparison: PcaComparisonResult): string[] =>
+const hasFieldChange = (comparison: PcaComparisonResult, field: string): boolean =>
+  comparison.rows.some(row => row.values[field]?.changed);
+
+const reportFields = (comparison: PcaComparisonResult): string[] =>
   comparison.selectedFields.filter(field =>
-    comparison.rows.some(row => row.values[field]?.changed)
+    isPcaReportContextField(field) || hasFieldChange(comparison, field)
   );
 
 const diffValue = (
@@ -314,31 +344,64 @@ const diffValue = (
   return 'Changed';
 };
 
+const oldNewReportValue = (
+  field: string,
+  value: PcaComparisonValue,
+  side: 'old' | 'new'
+): string => {
+  if (!value.changed) {
+    return isPcaReportContextField(field) ? (side === 'old' ? value.left : value.right) : '';
+  }
+
+  if (!isRefDesField(field)) {
+    return side === 'old' ? value.left : value.right;
+  }
+
+  const leftTokens = rangeAwareTokens(value.left);
+  const rightTokens = rangeAwareTokens(value.right);
+  const added = tokenDifference(rightTokens, leftTokens);
+  const removed = tokenDifference(leftTokens, rightTokens);
+
+  if (!added && !removed) {
+    return side === 'old' ? value.left : value.right;
+  }
+
+  return side === 'old' ? removed : added;
+};
+
 export const createPcaReportTable = (comparison: PcaComparisonResult): PcaReportTable => {
   const columns: PcaReportColumn[] = [
     { header: comparison.keyField, key: 'key', width: 24 },
   ];
-  const fieldsWithChanges = changedReportFields(comparison);
+  const fieldsToReport = reportFields(comparison);
 
-  fieldsWithChanges.forEach((field, index) => {
+  fieldsToReport.forEach((field, index) => {
     const label = reportFieldLabel(field);
+    const includeDiff = hasFieldChange(comparison, field);
+
     columns.push(
       { header: `${label} Old`, key: `field_${index}_old`, width: isRefDesField(field) ? 48 : 16 },
-      { header: `${label} New`, key: `field_${index}_new`, width: isRefDesField(field) ? 48 : 16 },
-      { header: `${label} Diff`, key: `field_${index}_diff`, width: isRefDesField(field) ? 42 : 16 }
+      { header: `${label} New`, key: `field_${index}_new`, width: isRefDesField(field) ? 48 : 16 }
     );
+
+    if (includeDiff) {
+      columns.push({ header: `${label} Diff`, key: `field_${index}_diff`, width: isRefDesField(field) ? 42 : 16 });
+    }
   });
 
   const rows = comparison.rows
-    .filter(row => fieldsWithChanges.some(field => row.values[field]?.changed))
+    .filter(row => comparison.selectedFields.some(field => row.values[field]?.changed))
     .map(row => {
       const reportRow: Record<string, string | number> = { key: row.key };
 
-      fieldsWithChanges.forEach((field, index) => {
+      fieldsToReport.forEach((field, index) => {
         const value = row.values[field] || { left: '', right: '', changed: false };
-        reportRow[`field_${index}_old`] = value.changed ? value.left : '';
-        reportRow[`field_${index}_new`] = value.changed ? value.right : '';
-        reportRow[`field_${index}_diff`] = value.changed ? diffValue(field, value, row.status) : '';
+        reportRow[`field_${index}_old`] = oldNewReportValue(field, value, 'old');
+        reportRow[`field_${index}_new`] = oldNewReportValue(field, value, 'new');
+
+        if (hasFieldChange(comparison, field)) {
+          reportRow[`field_${index}_diff`] = value.changed ? diffValue(field, value, row.status) : '';
+        }
       });
 
       return reportRow;
@@ -349,8 +412,8 @@ export const createPcaReportTable = (comparison: PcaComparisonResult): PcaReport
 
 export const createPcaExportWorkbook = async (comparison: PcaComparisonResult): Promise<ArrayBuffer> => {
   const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('PCA Comparison');
-  workbook.creator = 'Elizra BOM Compare';
+  const worksheet = workbook.addWorksheet('AST Comparison');
+  workbook.creator = 'Elisra BOM Compare';
   workbook.created = new Date();
 
   const reportTable = createPcaReportTable(comparison);

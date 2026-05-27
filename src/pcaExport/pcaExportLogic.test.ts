@@ -3,6 +3,7 @@ import {
   comparePcaRows,
   createPcaExportWorkbook,
   createPcaReportTable,
+  getPcaWorkbookSheetNames,
   isPcaComparableField,
   normalizeRangeAwareValue,
   parsePcaWorkbook,
@@ -43,6 +44,30 @@ describe('parsePcaWorkbook', () => {
     expect(parsed.rows).toHaveLength(2);
     expect(parsed.rows[0]['#']).toBe('0.0');
     expect(parsed.rows[0]).not.toHaveProperty('Synthetic product title');
+  });
+
+  it('lists sheets and parses the selected worksheet', () => {
+    const workbook = XLSX.utils.book_new();
+    const firstWorksheet = XLSX.utils.aoa_to_sheet([
+      ['', '', 'First title'],
+      headers,
+      ['1.1', 'FIRST', 'First item', 1, 'R1', '', ''],
+    ]);
+    const secondWorksheet = XLSX.utils.aoa_to_sheet([
+      ['', '', 'Second title'],
+      headers,
+      ['1.1', 'SECOND', 'Second item', 1, 'R2', '', ''],
+    ]);
+    XLSX.utils.book_append_sheet(workbook, firstWorksheet, 'Bill of Materials');
+    XLSX.utils.book_append_sheet(workbook, secondWorksheet, 'Alternate BOM');
+    const buffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
+
+    expect(getPcaWorkbookSheetNames(buffer)).toEqual(['Bill of Materials', 'Alternate BOM']);
+
+    const parsed = parsePcaWorkbook(buffer, 'Alternate BOM');
+
+    expect(parsed.sheetName).toBe('Alternate BOM');
+    expect(parsed.rows[0]['Part Number']).toBe('SECOND');
   });
 });
 
@@ -177,19 +202,23 @@ describe('createPcaReportTable', () => {
     expect(report.rows).toHaveLength(1);
     expect(report.columns.map(column => column.header)).toEqual([
       'Part Number',
+      'Description Old',
+      'Description New',
       'Qty Old',
       'Qty New',
       'Qty Diff',
     ]);
     expect(report.rows[0]).toEqual({
       key: 'P2',
-      field_0_old: '3',
-      field_0_new: '4',
-      field_0_diff: 1,
+      field_0_old: 'Same',
+      field_0_new: 'Same',
+      field_1_old: '3',
+      field_1_new: '4',
+      field_1_diff: 1,
     });
   });
 
-  it('summarizes Ref Des added and removed items in a Diff column', () => {
+  it('shows only Ref Des added and removed items in Old and New columns', () => {
     const comparison = comparePcaRows({
       leftRows: [{ 'Part Number': 'P1', 'Ref Des': 'R1 R2 R3' }],
       rightRows: [{ 'Part Number': 'P1', 'Ref Des': 'R2 R3 R4' }],
@@ -205,6 +234,8 @@ describe('createPcaReportTable', () => {
       'Ref Des New',
       'Ref Des Diff',
     ]);
+    expect(report.rows[0].field_0_old).toBe('R1');
+    expect(report.rows[0].field_0_new).toBe('R4');
     expect(report.rows[0].field_0_diff).toBe('Added: R4; Removed: R1');
   });
 });
@@ -229,13 +260,23 @@ describe('createPcaExportWorkbook', () => {
     const worksheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json<Record<string, string>>(worksheet, { defval: '' });
 
+    expect(workbook.SheetNames[0]).toBe('AST Comparison');
     expect(rows).toHaveLength(1);
-    expect(Object.keys(rows[0])).toEqual(['Part Number', 'Qty Old', 'Qty New', 'Qty Diff']);
+    expect(Object.keys(rows[0])).toEqual([
+      'Part Number',
+      'Qty Old',
+      'Qty New',
+      'Qty Diff',
+      'Description Old',
+      'Description New',
+    ]);
     expect(rows[0]).toEqual({
       'Part Number': 'P2',
       'Qty Old': '2',
       'Qty New': '3',
       'Qty Diff': 1,
+      'Description Old': 'Same',
+      'Description New': 'Same',
     });
   });
 });

@@ -1370,9 +1370,11 @@ const App: React.FC = () => {
     <>
       <Navigation />
       <Routes>
-        <Route path="/" element={<Navigate to="/elizra" replace />} />
-        <Route path="/elizra" element={<MainContent />} />
-        <Route path="/pca" element={<PcaExportCompare />} />
+        <Route path="/" element={<Navigate to="/elisra" replace />} />
+        <Route path="/elisra" element={<MainContent />} />
+        <Route path="/elizra" element={<Navigate to="/elisra" replace />} />
+        <Route path="/ast" element={<PcaExportCompare />} />
+        <Route path="/pca" element={<Navigate to="/ast" replace />} />
         <Route path="/about" element={<About />} />
       </Routes>
     </>

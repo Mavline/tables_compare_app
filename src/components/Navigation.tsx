@@ -42,20 +42,20 @@ const Navigation: React.FC = () => {
         margin: '0 auto'
       }}>
         <Link
-          to="/elizra"
+          to="/elisra"
           style={linkStyle}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          Elizra
+          Elisra
         </Link>
         <Link
-          to="/pca"
+          to="/ast"
           style={linkStyle}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          PCA
+          AST
         </Link>
         <Link
           to="/about"

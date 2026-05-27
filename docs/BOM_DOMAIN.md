@@ -58,17 +58,20 @@ Each file gets exactly one key field. The merge uses it for left-right matching.
 
 Two BOMs may use different key names (`PN` vs `Part Number`); the user selects each independently. There is no automatic detection. The merge filter compares only the *mapped* columns, so a missing key match still surfaces the row.
 
-## PCA Export route
+## AST Export route
 
-`/pca` handles the PCA Export workbook shape separately from the legacy Elizra grouped BOM flow. The route expects normal workbook rows below a detected header row, typically on a sheet named `Bill of Materials`, and does not read Excel outline levels.
+`/ast` handles the AST/PCA Export workbook shape separately from the legacy Elisra grouped BOM flow. `/pca` redirects to `/ast`. The route expects normal workbook rows below a detected header row, often on a sheet named `Bill of Materials`, and does not read Excel outline levels.
 
 Domain rules for this route:
 
 - The user still chooses the key field and comparison fields manually.
-- The `#` column is an ordinary column. It may represent order in the source workbook, but the app does not infer hierarchy from it and does not compare it unless selected.
+- The user chooses the sheet to compare for each uploaded workbook before common columns are derived.
+- The `#` column may represent order in the source workbook, but the app does not infer hierarchy from it and does not compare it.
+- The selected key field is used only for matching and is not compared as a data field.
+- Quantity and description columns are retained as report context when present, even when unchanged. Their `Diff` columns are emitted only when those fields have changes in the result.
 - The comparison uses the same broad merge principle as `mergeTables`: key maps plus a positional pass, with right-only rows inserted during that pass.
 - Selected field values are compared after range-aware normalization, so `R1-R3` can compare equal to `R1 R2 R3`.
-- Export is flat: `Status`, `Key`, `Field`, left file value, right file value. It does not emit `Level_*`, `LevelValue`, `Canceled_*`, or `Added_*` columns.
+- Export is a wide row-per-BOM-item table. Changed field groups are emitted as `Old`, `New`, and `Diff`; Ref Des `Old`/`New` cells contain only removed/added designators rather than the full shared list.
 
 ## Description field detection
 

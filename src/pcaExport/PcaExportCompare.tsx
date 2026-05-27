@@ -4,7 +4,9 @@ import {
   comparePcaRows,
   createPcaExportWorkbook,
   createPcaReportTable,
+  getPcaWorkbookSheetNames,
   isPcaComparableField,
+  isPcaReportContextField,
   parsePcaWorkbook,
   ParsedPcaWorkbook,
   PcaComparisonResult,
@@ -13,6 +15,8 @@ import {
 
 interface LoadedPcaFile {
   file: File;
+  workbookData: ArrayBuffer;
+  sheetNames: string[];
   parsed: ParsedPcaWorkbook;
 }
 
@@ -151,7 +155,7 @@ const PcaExportCompare: React.FC = () => {
 
   const commonHeaders = useMemo(() => {
     const [left, right] = loadedFiles;
-    if (!left || !right) return left?.parsed.headers || right?.parsed.headers || [];
+    if (!left || !right) return [];
 
     const rightHeaders = new Set(right.parsed.headers);
     return left.parsed.headers.filter(header => rightHeaders.has(header));
@@ -167,22 +171,54 @@ const PcaExportCompare: React.FC = () => {
     return createPcaReportTable(comparison);
   }, [comparison]);
 
+  const alwaysIncludedFields = useMemo(
+    () => commonHeaders.filter(header => isPcaReportContextField(header) && isPcaComparableField(header, keyField)),
+    [commonHeaders, keyField]
+  );
+
+  const comparisonFields = useMemo(
+    () => Array.from(new Set([...selectedFields, ...alwaysIncludedFields])),
+    [alwaysIncludedFields, selectedFields]
+  );
+
   const handleUpload = async (fileIndex: number, file: File | undefined) => {
     if (!file) return;
 
     try {
       setError('');
-      const parsed = parsePcaWorkbook(await file.arrayBuffer());
+      const workbookData = await file.arrayBuffer();
+      const sheetNames = getPcaWorkbookSheetNames(workbookData);
+      const parsed = parsePcaWorkbook(workbookData);
       setLoadedFiles(previous => {
         const next = [...previous];
-        next[fileIndex] = { file, parsed };
+        next[fileIndex] = { file, workbookData, sheetNames, parsed };
         return next;
       });
       setKeyField('');
       setSelectedFields([]);
       setComparison(null);
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : 'Failed to read PCA Export workbook.');
+      setError(uploadError instanceof Error ? uploadError.message : 'Failed to read AST workbook.');
+    }
+  };
+
+  const handleSheetSelection = (fileIndex: number, sheetName: string) => {
+    const loaded = loadedFiles[fileIndex];
+    if (!loaded) return;
+
+    try {
+      setError('');
+      const parsed = parsePcaWorkbook(loaded.workbookData, sheetName);
+      setLoadedFiles(previous => {
+        const next = [...previous];
+        next[fileIndex] = { ...loaded, parsed };
+        return next;
+      });
+      setKeyField('');
+      setSelectedFields([]);
+      setComparison(null);
+    } catch (sheetError) {
+      setError(sheetError instanceof Error ? sheetError.message : 'Failed to read selected worksheet.');
     }
   };
 
@@ -209,14 +245,14 @@ const PcaExportCompare: React.FC = () => {
   const runComparison = () => {
     const [left, right] = loadedFiles;
     if (!left || !right) {
-      setError('Upload two PCA Export workbooks first.');
+      setError('Upload two AST workbooks first.');
       return;
     }
     if (!keyField) {
       setError('Select a key field before comparing.');
       return;
     }
-    if (selectedFields.length === 0) {
+    if (comparisonFields.length === 0) {
       setError('Select at least one field to compare.');
       return;
     }
@@ -226,7 +262,7 @@ const PcaExportCompare: React.FC = () => {
       leftRows: left.parsed.rows,
       rightRows: right.parsed.rows,
       keyField,
-      selectedFields,
+      selectedFields: comparisonFields,
     }));
   };
 
@@ -240,14 +276,14 @@ const PcaExportCompare: React.FC = () => {
     const buffer = await createPcaExportWorkbook(comparison);
     saveAs(
       new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-      'pca_export_comparison.xlsx'
+      'ast_bom_comparison.xlsx'
     );
   };
 
   return (
     <div className="App">
       <header className="App-header" style={{ boxSizing: 'border-box' }}>
-        <h1 style={{ margin: '0 0 24px', color: '#A78BFA' }}>PCA BOM Comparison</h1>
+        <h1 style={{ margin: '0 0 24px', color: '#A78BFA' }}>AST BOM Comparison</h1>
 
         <section style={panelStyle}>
           <h2 style={{ color: '#7E57C2', margin: '0 0 15px', fontSize: '20px' }}>
@@ -261,7 +297,8 @@ const PcaExportCompare: React.FC = () => {
             lineHeight: '1.8',
             fontSize: '16px',
           }}>
-            <span>Upload the two PCA Export BOM workbooks you want to compare</span>
+            <span>Upload the two AST BOM workbooks you want to compare</span>
+            <span>Select the worksheet to compare in each workbook</span>
             <span>Select the shared key field used to match rows</span>
             <span>Check the shared columns you want included in the comparison</span>
             <span>Click "Compare" to preview differences, then "Download" for the Excel report</span>
@@ -311,9 +348,23 @@ const PcaExportCompare: React.FC = () => {
                       }}>
                         Selected file: {loaded.file.name}
                       </p>
+                      <label
+                        htmlFor={`pca-sheet-select-${index}`}
+                        style={{ display: 'block', marginBottom: '8px', color: '#E6EDF3' }}
+                      >
+                        Select worksheet:
+                      </label>
+                      <select
+                        id={`pca-sheet-select-${index}`}
+                        value={loaded.parsed.sheetName}
+                        onChange={event => handleSheetSelection(index, event.target.value)}
+                        style={{ ...selectStyle, marginBottom: '15px' }}
+                      >
+                        {loaded.sheetNames.map(sheetName => (
+                          <option key={sheetName} value={sheetName}>{sheetName}</option>
+                        ))}
+                      </select>
                       <div style={metaGridStyle}>
-                        <span style={metaLabelStyle}>Sheet</span>
-                        <span style={metaValueStyle}>{loaded.parsed.sheetName}</span>
                         <span style={metaLabelStyle}>Columns</span>
                         <span style={metaValueStyle}>{loaded.parsed.headers.length}</span>
                         <span style={metaLabelStyle}>Rows</span>
@@ -393,7 +444,8 @@ const PcaExportCompare: React.FC = () => {
               <label key={header} style={fieldCardStyle}>
                 <input
                   type="checkbox"
-                  checked={selectedFields.includes(header)}
+                  checked={selectedFields.includes(header) || alwaysIncludedFields.includes(header)}
+                  disabled={alwaysIncludedFields.includes(header)}
                   onChange={() => toggleField(header)}
                 />
                 <span style={{ overflowWrap: 'anywhere' }}>{header}</span>
