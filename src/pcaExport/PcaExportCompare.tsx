@@ -3,23 +3,17 @@ import { saveAs } from 'file-saver';
 import {
   comparePcaRows,
   createPcaExportWorkbook,
+  createPcaReportTable,
+  isPcaComparableField,
   parsePcaWorkbook,
   ParsedPcaWorkbook,
   PcaComparisonResult,
-  PcaComparisonRow,
+  PcaReportTable,
 } from './pcaExportLogic';
 
 interface LoadedPcaFile {
   file: File;
   parsed: ParsedPcaWorkbook;
-}
-
-interface PreviewRow {
-  status: PcaComparisonRow['status'];
-  key: string;
-  field: string;
-  left: string;
-  right: string;
 }
 
 const panelStyle: React.CSSProperties = {
@@ -148,12 +142,6 @@ const fieldCardStyle: React.CSSProperties = {
   minWidth: 0,
 };
 
-const statusLabels: Record<PcaComparisonRow['status'], string> = {
-  changed: 'Changed',
-  added: 'Added',
-  removed: 'Removed',
-};
-
 const PcaExportCompare: React.FC = () => {
   const [loadedFiles, setLoadedFiles] = useState<Array<LoadedPcaFile | null>>([null, null]);
   const [keyField, setKeyField] = useState('');
@@ -169,21 +157,14 @@ const PcaExportCompare: React.FC = () => {
     return left.parsed.headers.filter(header => rightHeaders.has(header));
   }, [loadedFiles]);
 
-  const previewRows = useMemo<PreviewRow[]>(() => {
-    if (!comparison) return [];
+  const comparableHeaders = useMemo(
+    () => commonHeaders.filter(header => isPcaComparableField(header, keyField)),
+    [commonHeaders, keyField]
+  );
 
-    return comparison.rows.flatMap(row =>
-      comparison.selectedFields
-        .map(field => ({ field, value: row.values[field] }))
-        .filter(({ value }) => value?.changed)
-        .map(({ field, value }) => ({
-          status: row.status,
-          key: row.key,
-          field,
-          left: value.left,
-          right: value.right,
-        }))
-    );
+  const previewTable = useMemo<PcaReportTable | null>(() => {
+    if (!comparison) return null;
+    return createPcaReportTable(comparison);
   }, [comparison]);
 
   const handleUpload = async (fileIndex: number, file: File | undefined) => {
@@ -206,6 +187,7 @@ const PcaExportCompare: React.FC = () => {
   };
 
   const toggleField = (field: string) => {
+    if (!isPcaComparableField(field, keyField)) return;
     setComparison(null);
     setSelectedFields(previous =>
       previous.includes(field)
@@ -216,7 +198,7 @@ const PcaExportCompare: React.FC = () => {
 
   const selectAllFields = () => {
     setComparison(null);
-    setSelectedFields(commonHeaders);
+    setSelectedFields(comparableHeaders);
   };
 
   const clearFields = () => {
@@ -255,10 +237,7 @@ const PcaExportCompare: React.FC = () => {
       return;
     }
 
-    const buffer = await createPcaExportWorkbook(comparison, {
-      leftLabel: left.file.name,
-      rightLabel: right.file.name,
-    });
+    const buffer = await createPcaExportWorkbook(comparison);
     saveAs(
       new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
       'pca_export_comparison.xlsx'
@@ -368,7 +347,14 @@ const PcaExportCompare: React.FC = () => {
             <select
               id="pca-key-field"
               value={keyField}
-              onChange={event => setKeyField(event.target.value)}
+              onChange={event => {
+                const nextKeyField = event.target.value;
+                setKeyField(nextKeyField);
+                setSelectedFields(previous =>
+                  previous.filter(field => isPcaComparableField(field, nextKeyField))
+                );
+                setComparison(null);
+              }}
               style={selectStyle}
             >
               <option value="">Select a column</option>
@@ -387,9 +373,9 @@ const PcaExportCompare: React.FC = () => {
           }}>
             <button
               type="button"
-              style={commonHeaders.length === 0 ? disabledButtonStyle : buttonStyleBase}
+              style={comparableHeaders.length === 0 ? disabledButtonStyle : buttonStyleBase}
               onClick={selectAllFields}
-              disabled={commonHeaders.length === 0}
+              disabled={comparableHeaders.length === 0}
             >
               Select All Fields
             </button>
@@ -403,7 +389,7 @@ const PcaExportCompare: React.FC = () => {
             gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
             gap: '8px',
           }}>
-            {commonHeaders.map(header => (
+            {comparableHeaders.map(header => (
               <label key={header} style={fieldCardStyle}>
                 <input
                   type="checkbox"
@@ -446,16 +432,16 @@ const PcaExportCompare: React.FC = () => {
             </button>
             <button
               type="button"
-              style={!comparison || comparison.rows.length === 0 ? disabledButtonStyle : buttonStyleBase}
+              style={!previewTable || previewTable.rows.length === 0 ? disabledButtonStyle : buttonStyleBase}
               onClick={downloadComparison}
-              disabled={!comparison || comparison.rows.length === 0}
+              disabled={!previewTable || previewTable.rows.length === 0}
             >
               Download
             </button>
           </div>
           {comparison && (
             <div style={{ color: '#C9D1D9', marginTop: '12px', textAlign: 'center' }}>
-              Rows with differences: {comparison.rows.length}
+              Rows with differences: {previewTable?.rows.length || 0}
             </div>
           )}
         </section>
@@ -463,26 +449,24 @@ const PcaExportCompare: React.FC = () => {
         {comparison && (
           <section style={{ ...panelStyle, textAlign: 'center' }}>
             <h2 style={sectionTitleStyle}>Preview</h2>
-            {previewRows.length === 0 ? (
+            {!previewTable || previewTable.rows.length === 0 ? (
               <p style={{ color: '#C9D1D9', margin: 0 }}>No differences found in the selected fields.</p>
             ) : (
               <div style={{ overflowX: 'auto', textAlign: 'left' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                   <thead>
                     <tr>
-                      {['Status', 'Key', 'Field', 'File 1', 'File 2'].map(header => (
-                        <th key={header} style={tableHeaderStyle}>{header}</th>
+                      {previewTable.columns.map(column => (
+                        <th key={column.key} style={tableHeaderStyle}>{column.header}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {previewRows.slice(0, 100).map((row, index) => (
-                      <tr key={`${row.key}-${row.field}-${index}`}>
-                        <td style={tableCellStyle}>{statusLabels[row.status]}</td>
-                        <td style={tableCellStyle}>{row.key}</td>
-                        <td style={tableCellStyle}>{row.field}</td>
-                        <td style={tableCellStyle}>{row.left}</td>
-                        <td style={tableCellStyle}>{row.right}</td>
+                    {previewTable.rows.slice(0, 100).map((row, rowIndex) => (
+                      <tr key={`${row.key}-${rowIndex}`}>
+                        {previewTable.columns.map(column => (
+                          <td key={column.key} style={tableCellStyle}>{row[column.key]}</td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>

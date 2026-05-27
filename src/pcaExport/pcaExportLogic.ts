@@ -35,11 +35,32 @@ export interface PcaComparisonResult {
   rows: PcaComparisonRow[];
 }
 
+export interface PcaReportColumn {
+  header: string;
+  key: string;
+  width: number;
+}
+
+export interface PcaReportTable {
+  columns: PcaReportColumn[];
+  rows: Array<Record<string, string | number>>;
+}
+
 const preferredSheetName = 'Bill of Materials';
 
 const stringifyCell = (value: PcaCellValue): string => {
   if (value === null || value === undefined) return '';
   return String(value).trim();
+};
+
+const normalizeHeader = (value: string): string =>
+  value.toLowerCase().replace(/[_\s-]/g, '');
+
+export const isPcaComparableField = (field: string, keyField: string): boolean => {
+  const trimmedField = field.trim();
+  if (!trimmedField) return false;
+  if (trimmedField === '#') return false;
+  return normalizeHeader(trimmedField) !== normalizeHeader(keyField);
 };
 
 const countSignificantCells = (row: PcaCellValue[]): number =>
@@ -157,6 +178,7 @@ export const comparePcaRows = ({
   keyField,
   selectedFields,
 }: PcaCompareInput): PcaComparisonResult => {
+  const fieldsToCompare = selectedFields.filter(field => isPcaComparableField(field, keyField));
   const rightByKey = new Map<string, PcaRow>();
   const leftByKey = new Map<string, PcaRow>();
 
@@ -181,7 +203,7 @@ export const comparePcaRows = ({
       const key = stringifyCell(leftRow[keyField]);
       if (key) {
         const rightRow = rightByKey.get(key);
-        const values = buildComparisonValues(leftRow, rightRow, selectedFields);
+        const values = buildComparisonValues(leftRow, rightRow, fieldsToCompare);
 
         if (!rightRow) {
           resultRows.push({ key, status: 'removed', values });
@@ -197,14 +219,14 @@ export const comparePcaRows = ({
         resultRows.push({
           key,
           status: 'added',
-          values: buildComparisonValues(undefined, rightRowAtPosition, selectedFields),
+          values: buildComparisonValues(undefined, rightRowAtPosition, fieldsToCompare),
         });
       }
     }
   }
 
 
-  return { keyField, selectedFields, rows: resultRows };
+  return { keyField, selectedFields: fieldsToCompare, rows: resultRows };
 };
 
 const buildComparisonValues = (
@@ -224,37 +246,117 @@ const buildComparisonValues = (
   }, {});
 };
 
-export const createPcaExportWorkbook = async (
-  comparison: PcaComparisonResult,
-  labels: { leftLabel: string; rightLabel: string }
-): Promise<ArrayBuffer> => {
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('PCA Comparison');
-  const rows: Array<Record<string, string>> = [];
+const isQuantityField = (field: string): boolean => {
+  const normalized = normalizeHeader(field);
+  return normalized === 'quantity' || normalized === 'qty';
+};
 
-  comparison.rows.forEach(row => {
-    comparison.selectedFields.forEach(field => {
-      const value = row.values[field];
-      if (!value || !value.changed) return;
+const isRefDesField = (field: string): boolean => {
+  const normalized = normalizeHeader(field);
+  return normalized === 'refdes' || normalized === 'referencedesignator' || normalized === 'referencedesignators';
+};
 
-      rows.push({
-        Status: row.status,
-        Key: row.key,
-        Field: field,
-        [labels.leftLabel]: value.left,
-        [labels.rightLabel]: value.right,
-      });
-    });
+const reportFieldLabel = (field: string): string => {
+  if (isQuantityField(field)) return 'Qty';
+  if (isRefDesField(field)) return 'Ref Des';
+  return field;
+};
+
+const numberOrZero = (value: string): number | null => {
+  if (value === '') return 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const quantityDiff = (left: string, right: string): string | number => {
+  const leftNumber = numberOrZero(left);
+  const rightNumber = numberOrZero(right);
+  if (leftNumber === null || rightNumber === null) return '';
+  return rightNumber - leftNumber;
+};
+
+const rangeAwareTokens = (value: PcaCellValue): string[] =>
+  normalizeRangeAwareValue(value)
+    .split(/\s+/)
+    .map(token => token.trim())
+    .filter(Boolean);
+
+const tokenDifference = (source: string[], comparison: string[]): string =>
+  source.filter(item => !comparison.includes(item)).join(', ');
+
+const changedReportFields = (comparison: PcaComparisonResult): string[] =>
+  comparison.selectedFields.filter(field =>
+    comparison.rows.some(row => row.values[field]?.changed)
+  );
+
+const diffValue = (
+  field: string,
+  value: PcaComparisonValue,
+  rowStatus: PcaComparisonRow['status']
+): string | number => {
+  if (isQuantityField(field)) {
+    return quantityDiff(value.left, value.right);
+  }
+
+  if (isRefDesField(field)) {
+    const leftTokens = rangeAwareTokens(value.left);
+    const rightTokens = rangeAwareTokens(value.right);
+    const added = tokenDifference(rightTokens, leftTokens);
+    const removed = tokenDifference(leftTokens, rightTokens);
+    return [
+      added ? `Added: ${added}` : '',
+      removed ? `Removed: ${removed}` : '',
+    ].filter(Boolean).join('; ');
+  }
+
+  if (rowStatus === 'added') return 'Added';
+  if (rowStatus === 'removed') return 'Removed';
+  return 'Changed';
+};
+
+export const createPcaReportTable = (comparison: PcaComparisonResult): PcaReportTable => {
+  const columns: PcaReportColumn[] = [
+    { header: comparison.keyField, key: 'key', width: 24 },
+  ];
+  const fieldsWithChanges = changedReportFields(comparison);
+
+  fieldsWithChanges.forEach((field, index) => {
+    const label = reportFieldLabel(field);
+    columns.push(
+      { header: `${label} Old`, key: `field_${index}_old`, width: isRefDesField(field) ? 48 : 16 },
+      { header: `${label} New`, key: `field_${index}_new`, width: isRefDesField(field) ? 48 : 16 },
+      { header: `${label} Diff`, key: `field_${index}_diff`, width: isRefDesField(field) ? 42 : 16 }
+    );
   });
 
-  worksheet.columns = [
-    { header: 'Status', key: 'Status', width: 12 },
-    { header: 'Key', key: 'Key', width: 24 },
-    { header: 'Field', key: 'Field', width: 28 },
-    { header: labels.leftLabel, key: labels.leftLabel, width: 32 },
-    { header: labels.rightLabel, key: labels.rightLabel, width: 32 },
-  ];
-  worksheet.addRows(rows);
+  const rows = comparison.rows
+    .filter(row => fieldsWithChanges.some(field => row.values[field]?.changed))
+    .map(row => {
+      const reportRow: Record<string, string | number> = { key: row.key };
+
+      fieldsWithChanges.forEach((field, index) => {
+        const value = row.values[field] || { left: '', right: '', changed: false };
+        reportRow[`field_${index}_old`] = value.changed ? value.left : '';
+        reportRow[`field_${index}_new`] = value.changed ? value.right : '';
+        reportRow[`field_${index}_diff`] = value.changed ? diffValue(field, value, row.status) : '';
+      });
+
+      return reportRow;
+    });
+
+  return { columns, rows };
+};
+
+export const createPcaExportWorkbook = async (comparison: PcaComparisonResult): Promise<ArrayBuffer> => {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('PCA Comparison');
+  workbook.creator = 'Elizra BOM Compare';
+  workbook.created = new Date();
+
+  const reportTable = createPcaReportTable(comparison);
+
+  worksheet.columns = reportTable.columns;
+  worksheet.addRows(reportTable.rows);
 
   worksheet.getRow(1).eachCell(cell => {
     cell.fill = {
@@ -262,7 +364,7 @@ export const createPcaExportWorkbook = async (
       pattern: 'solid',
       fgColor: { argb: 'B1F0F0' },
     };
-    cell.font = { bold: true, color: { argb: '000000' } };
+    cell.font = { bold: true, size: 8.43, color: { argb: '000000' } };
     cell.border = {
       top: { style: 'thin' },
       left: { style: 'thin' },
@@ -280,6 +382,7 @@ export const createPcaExportWorkbook = async (
         bottom: { style: 'thin' },
         right: { style: 'thin' },
       };
+      cell.alignment = { vertical: 'top', wrapText: true };
     });
   });
 

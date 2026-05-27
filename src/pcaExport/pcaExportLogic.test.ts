@@ -2,6 +2,8 @@ import * as XLSX from 'xlsx';
 import {
   comparePcaRows,
   createPcaExportWorkbook,
+  createPcaReportTable,
+  isPcaComparableField,
   normalizeRangeAwareValue,
   parsePcaWorkbook,
 } from './pcaExportLogic';
@@ -81,6 +83,18 @@ describe('comparePcaRows', () => {
     expect(result.rows[0].values.Quantity.changed).toBe(true);
   });
 
+  it('does not compare the key field or PCA line-number column', () => {
+    const result = comparePcaRows({
+      leftRows: [{ '#': '1.1', 'Part Number': 'P1', Quantity: '1' }],
+      rightRows: [{ '#': '2.1', 'Part Number': 'P1', Quantity: '1' }],
+      keyField: 'Part Number',
+      selectedFields: ['#', 'Part Number', 'Quantity'],
+    });
+
+    expect(result.selectedFields).toEqual(['Quantity']);
+    expect(result.rows).toHaveLength(0);
+  });
+
   it('keeps right-only rows in positional pass order like the existing merge flow', () => {
     const result = comparePcaRows({
       leftRows: [
@@ -102,6 +116,14 @@ describe('comparePcaRows', () => {
   });
 });
 
+describe('isPcaComparableField', () => {
+  it('excludes the key field and PCA row-number column', () => {
+    expect(isPcaComparableField('#', 'Part Number')).toBe(false);
+    expect(isPcaComparableField('Part Number', 'Part Number')).toBe(false);
+    expect(isPcaComparableField('Ref Des', 'Part Number')).toBe(true);
+  });
+});
+
 describe('normalizeRangeAwareValue', () => {
   it('normalizes prefixed and numeric ranges while leaving mixed prefixes literal', () => {
     expect(normalizeRangeAwareValue('R1-R3')).toBe('R1 R2 R3');
@@ -115,24 +137,105 @@ describe('normalizeRangeAwareValue', () => {
   });
 });
 
-describe('createPcaExportWorkbook', () => {
-  it('creates a workbook containing only comparison rows', async () => {
+describe('createPcaReportTable', () => {
+  it('creates a wide table with only rows and field groups that have differences', () => {
     const comparison = comparePcaRows({
-      leftRows: [{ 'Part Number': 'P1', Quantity: '1' }],
-      rightRows: [{ 'Part Number': 'P1', Quantity: '2' }],
+      leftRows: [
+        {
+          'Part Number': 'P1',
+          Description: 'Same',
+          Quantity: '1',
+          'Ref Des': 'R1 R2',
+        },
+        {
+          'Part Number': 'P2',
+          Description: 'Same',
+          Quantity: '3',
+          'Ref Des': 'R3-R5',
+        },
+      ],
+      rightRows: [
+        {
+          'Part Number': 'P1',
+          Description: 'Same',
+          Quantity: '1',
+          'Ref Des': 'R1 R2',
+        },
+        {
+          'Part Number': 'P2',
+          Description: 'Same',
+          Quantity: '4',
+          'Ref Des': 'R3 R4 R5',
+        },
+      ],
       keyField: 'Part Number',
-      selectedFields: ['Quantity'],
+      selectedFields: ['Part Number', 'Description', 'Quantity', 'Ref Des'],
     });
 
-    const buffer = await createPcaExportWorkbook(comparison, {
-      leftLabel: 'Rev A',
-      rightLabel: 'Rev B',
+    const report = createPcaReportTable(comparison);
+
+    expect(report.rows).toHaveLength(1);
+    expect(report.columns.map(column => column.header)).toEqual([
+      'Part Number',
+      'Qty Old',
+      'Qty New',
+      'Qty Diff',
+    ]);
+    expect(report.rows[0]).toEqual({
+      key: 'P2',
+      field_0_old: '3',
+      field_0_new: '4',
+      field_0_diff: 1,
     });
+  });
+
+  it('summarizes Ref Des added and removed items in a Diff column', () => {
+    const comparison = comparePcaRows({
+      leftRows: [{ 'Part Number': 'P1', 'Ref Des': 'R1 R2 R3' }],
+      rightRows: [{ 'Part Number': 'P1', 'Ref Des': 'R2 R3 R4' }],
+      keyField: 'Part Number',
+      selectedFields: ['Ref Des'],
+    });
+
+    const report = createPcaReportTable(comparison);
+
+    expect(report.columns.map(column => column.header)).toEqual([
+      'Part Number',
+      'Ref Des Old',
+      'Ref Des New',
+      'Ref Des Diff',
+    ]);
+    expect(report.rows[0].field_0_diff).toBe('Added: R4; Removed: R1');
+  });
+});
+
+describe('createPcaExportWorkbook', () => {
+  it('creates a wide workbook containing only changed BOM rows', async () => {
+    const comparison = comparePcaRows({
+      leftRows: [
+        { 'Part Number': 'P1', Quantity: '1', Description: 'Same' },
+        { 'Part Number': 'P2', Quantity: '2', Description: 'Same' },
+      ],
+      rightRows: [
+        { 'Part Number': 'P1', Quantity: '1', Description: 'Same' },
+        { 'Part Number': 'P2', Quantity: '3', Description: 'Same' },
+      ],
+      keyField: 'Part Number',
+      selectedFields: ['Part Number', 'Quantity', 'Description'],
+    });
+
+    const buffer = await createPcaExportWorkbook(comparison);
     const workbook = XLSX.read(buffer, { type: 'array' });
     const worksheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json<Record<string, string>>(worksheet, { defval: '' });
 
     expect(rows).toHaveLength(1);
-    expect(Object.keys(rows[0])).toEqual(['Status', 'Key', 'Field', 'Rev A', 'Rev B']);
+    expect(Object.keys(rows[0])).toEqual(['Part Number', 'Qty Old', 'Qty New', 'Qty Diff']);
+    expect(rows[0]).toEqual({
+      'Part Number': 'P2',
+      'Qty Old': '2',
+      'Qty New': '3',
+      'Qty Diff': 1,
+    });
   });
 });
