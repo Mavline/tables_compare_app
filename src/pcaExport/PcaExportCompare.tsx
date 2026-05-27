@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { saveAs } from 'file-saver';
 import {
   comparePcaRows,
@@ -23,20 +22,23 @@ interface PreviewRow {
   right: string;
 }
 
-const pageStyle: React.CSSProperties = {
-  minHeight: '100vh',
-  backgroundColor: '#0D1117',
+const panelStyle: React.CSSProperties = {
+  width: '100%',
+  backgroundColor: '#1C2128',
+  padding: '20px',
+  borderRadius: '8px',
+  marginBottom: '20px',
   color: '#E6EDF3',
-  padding: '96px 32px 48px',
+  textAlign: 'left',
   boxSizing: 'border-box',
-  overflowX: 'hidden',
 };
 
-const panelStyle: React.CSSProperties = {
+const fileCardStyle: React.CSSProperties = {
   backgroundColor: '#161B22',
-  border: '1px solid #30363D',
-  borderRadius: '8px',
   padding: '20px',
+  borderRadius: '8px',
+  boxSizing: 'border-box',
+  minWidth: 0,
 };
 
 const buttonStyleBase: React.CSSProperties = {
@@ -63,29 +65,51 @@ const selectStyle: React.CSSProperties = {
   borderRadius: '4px',
   backgroundColor: '#1C2128',
   color: '#E6EDF3',
-};
-
-const fileButtonStyle: React.CSSProperties = {
-  ...buttonStyleBase,
-  display: 'inline-block',
-  textAlign: 'center',
-  minWidth: '190px',
+  fontSize: '14px',
+  boxSizing: 'border-box',
 };
 
 const hiddenFileInputStyle: React.CSSProperties = {
   position: 'absolute',
-  inset: 0,
+  top: 0,
+  left: 0,
+  width: '100%',
+  height: '100%',
   opacity: 0,
   cursor: 'pointer',
+  zIndex: 2,
+};
+
+const fileButtonWrapperStyle: React.CSSProperties = {
+  position: 'relative',
+  marginBottom: '20px',
+  width: '100%',
+  maxWidth: '520px',
+};
+
+const fileButtonStyle: React.CSSProperties = {
+  padding: '10px 15px',
+  backgroundColor: '#4B3B80',
+  color: '#E6EDF3',
+  border: 'none',
+  borderRadius: '4px',
+  cursor: 'pointer',
+  textAlign: 'center',
+  fontSize: '14px',
+  fontWeight: 'bold',
+  width: '100%',
+  position: 'relative',
+  zIndex: 1,
+  boxSizing: 'border-box',
 };
 
 const metaGridStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: '110px minmax(0, 1fr)',
+  gridTemplateColumns: '100px minmax(0, 1fr)',
   gap: '8px 14px',
   alignItems: 'start',
-  marginTop: '16px',
   color: '#C9D1D9',
+  fontSize: '14px',
 };
 
 const metaLabelStyle: React.CSSProperties = {
@@ -101,6 +125,7 @@ const metaValueStyle: React.CSSProperties = {
 const sectionTitleStyle: React.CSSProperties = {
   margin: '0 0 16px',
   color: '#E6EDF3',
+  fontSize: '20px',
 };
 
 const fieldCardStyle: React.CSSProperties = {
@@ -108,15 +133,16 @@ const fieldCardStyle: React.CSSProperties = {
   alignItems: 'center',
   gap: '10px',
   padding: '10px 12px',
-  backgroundColor: '#1C2128',
+  backgroundColor: '#161B22',
   borderRadius: '4px',
   minHeight: '42px',
+  minWidth: 0,
 };
 
 const statusLabels: Record<PcaComparisonRow['status'], string> = {
-  changed: 'Изменено',
-  added: 'Добавлено',
-  removed: 'Удалено',
+  changed: 'Changed',
+  added: 'Added',
+  removed: 'Removed',
 };
 
 const PcaExportCompare: React.FC = () => {
@@ -231,90 +257,122 @@ const PcaExportCompare: React.FC = () => {
   };
 
   return (
-    <main style={pageStyle}>
-      <div style={{ maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
-        <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
-          <div>
-            <h1 style={{ margin: 0, color: '#A78BFA' }}>PCA Export: сравнение</h1>
-          </div>
-          <Link to="/" style={{ ...buttonStyleBase, textDecoration: 'none', height: 'fit-content' }}>
-            Главная
-          </Link>
-        </div>
+    <div className="App">
+      <header className="App-header" style={{ boxSizing: 'border-box' }}>
+        <h1 style={{ margin: '0 0 24px', color: '#A78BFA' }}>PCA Export BOM Comparison</h1>
 
-        <section style={{ ...panelStyle, marginBottom: '20px', backgroundColor: '#1C2128' }}>
-          <h2 style={sectionTitleStyle}>1. Загрузите два Excel-файла</h2>
-          <div style={{ color: '#C9D1D9', lineHeight: 1.7 }}>
-            <div>Левый файл — старая ревизия. Правый файл — новая ревизия.</div>
-            <div>После загрузки выберите колонку-ключ и поля, которые нужно сравнить.</div>
+        <section style={panelStyle}>
+          <h2 style={{ color: '#7E57C2', margin: '0 0 15px', fontSize: '20px' }}>
+            Quick Start Guide:
+          </h2>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            alignItems: 'flex-start',
+            lineHeight: '1.8',
+            fontSize: '16px',
+          }}>
+            <span>Upload the two PCA Export BOM workbooks you want to compare</span>
+            <span>Select the shared key field used to match rows</span>
+            <span>Check the shared columns you want included in the comparison</span>
+            <span>Click "Compare" to preview differences, then "Download" for the Excel report</span>
           </div>
         </section>
 
-        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '20px' }}>
-          {[0, 1].map(index => {
-            const loaded = loadedFiles[index];
-            return (
-              <div key={index} style={panelStyle}>
-                <h2 style={sectionTitleStyle}>Файл {index + 1}</h2>
-                <label style={{ position: 'relative', display: 'inline-block', marginBottom: '14px' }}>
-                  <span style={fileButtonStyle}>Выбрать Excel-файл</span>
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={event => handleUpload(index, event.target.files?.[0])}
-                    style={hiddenFileInputStyle}
-                  />
-                </label>
-                {loaded ? (
-                  <div style={metaGridStyle}>
-                    <span style={metaLabelStyle}>Файл</span>
-                    <span style={metaValueStyle}>{loaded.file.name}</span>
-                    <span style={metaLabelStyle}>Лист</span>
-                    <span style={metaValueStyle}>{loaded.parsed.sheetName}</span>
-                    <span style={metaLabelStyle}>Колонки</span>
-                    <span style={metaValueStyle}>{loaded.parsed.headers.length}</span>
-                    <span style={metaLabelStyle}>Строки</span>
-                    <span style={metaValueStyle}>{loaded.parsed.rows.length}</span>
+        <section style={panelStyle}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: '20px',
+          }}>
+            {[0, 1].map(index => {
+              const loaded = loadedFiles[index];
+              return (
+                <div key={index} style={fileCardStyle}>
+                  <h2 style={sectionTitleStyle}>File {index + 1}</h2>
+                  <label
+                    htmlFor={`pca-file-input-${index}`}
+                    style={{ display: 'block', marginBottom: '8px', color: '#E6EDF3' }}
+                  >
+                    Choose Excel file:
+                  </label>
+                  <div style={fileButtonWrapperStyle}>
+                    <input
+                      id={`pca-file-input-${index}`}
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={event => handleUpload(index, event.target.files?.[0])}
+                      style={hiddenFileInputStyle}
+                    />
+                    <div style={fileButtonStyle}>Choose File</div>
                   </div>
-                ) : (
-                  <p style={{ color: '#8B949E', margin: 0 }}>Файл не выбран</p>
-                )}
-              </div>
-            );
-          })}
+
+                  {!loaded && (
+                    <p style={{ color: '#E6EDF3', margin: '0 0 15px' }}>No file selected</p>
+                  )}
+
+                  {loaded && (
+                    <>
+                      <p style={{
+                        color: '#7E57C2',
+                        margin: '0 0 15px',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        wordBreak: 'break-word',
+                      }}>
+                        Selected file: {loaded.file.name}
+                      </p>
+                      <div style={metaGridStyle}>
+                        <span style={metaLabelStyle}>Sheet</span>
+                        <span style={metaValueStyle}>{loaded.parsed.sheetName}</span>
+                        <span style={metaLabelStyle}>Columns</span>
+                        <span style={metaValueStyle}>{loaded.parsed.headers.length}</span>
+                        <span style={metaLabelStyle}>Rows</span>
+                        <span style={metaValueStyle}>{loaded.parsed.rows.length}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </section>
 
-        <section style={{ ...panelStyle, marginBottom: '20px' }}>
-          <h2 style={sectionTitleStyle}>2. Выберите ключ и поля для сравнения</h2>
-          <label style={{ display: 'block', marginBottom: '16px' }}>
-            <span style={{ display: 'block', marginBottom: '8px' }}>
-              Ключевая колонка
+        <section style={panelStyle}>
+          <h2 style={sectionTitleStyle}>Key Field</h2>
+          <label style={{ display: 'block', marginBottom: '20px' }}>
+            <span style={{ display: 'block', marginBottom: '8px', color: '#E6EDF3' }}>
+              Select a key field:
             </span>
             <select value={keyField} onChange={event => setKeyField(event.target.value)} style={selectStyle}>
-              <option value="">Выберите колонку</option>
+              <option value="">Select a column</option>
               {commonHeaders.map(header => (
                 <option key={header} value={header}>{header}</option>
               ))}
             </select>
           </label>
 
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              style={commonHeaders.length === 0 ? disabledButtonStyle : buttonStyleBase}
-              onClick={selectAllFields}
-              disabled={commonHeaders.length === 0}
-            >
-              Выбрать все поля
-            </button>
-            <button type="button" style={buttonStyleBase} onClick={clearFields}>
-              Очистить выбор
-            </button>
+          <div style={{ marginBottom: '12px' }}>
+            <h2 style={sectionTitleStyle}>Fields to Compare</h2>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                style={commonHeaders.length === 0 ? disabledButtonStyle : buttonStyleBase}
+                onClick={selectAllFields}
+                disabled={commonHeaders.length === 0}
+              >
+                Select All Fields
+              </button>
+              <button type="button" style={buttonStyleBase} onClick={clearFields}>
+                Clear Selection
+              </button>
+            </div>
           </div>
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
             gap: '8px',
           }}>
             {commonHeaders.map(header => (
@@ -324,28 +382,27 @@ const PcaExportCompare: React.FC = () => {
                   checked={selectedFields.includes(header)}
                   onChange={() => toggleField(header)}
                 />
-                <span>{header}</span>
+                <span style={{ overflowWrap: 'anywhere' }}>{header}</span>
               </label>
             ))}
           </div>
         </section>
 
         {error && (
-          <div style={{
+          <section style={{
             ...panelStyle,
-            borderColor: '#F85149',
+            border: '1px solid #F85149',
             color: '#FFB4B4',
-            marginBottom: '20px',
           }}>
             {error}
-          </div>
+          </section>
         )}
 
-        <section style={{ ...panelStyle, marginBottom: '20px' }}>
-          <h2 style={sectionTitleStyle}>3. Сравните и скачайте результат</h2>
+        <section style={panelStyle}>
+          <h2 style={sectionTitleStyle}>Compare and Download</h2>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
             <button type="button" style={buttonStyleBase} onClick={runComparison}>
-              Сравнить выбранные поля
+              Compare
             </button>
             <button
               type="button"
@@ -353,11 +410,11 @@ const PcaExportCompare: React.FC = () => {
               onClick={downloadComparison}
               disabled={!comparison || comparison.rows.length === 0}
             >
-              Скачать Excel
+              Download
             </button>
             {comparison && (
               <span style={{ color: '#C9D1D9' }}>
-                Строк с отличиями: {comparison.rows.length}
+                Rows with differences: {comparison.rows.length}
               </span>
             )}
           </div>
@@ -365,15 +422,15 @@ const PcaExportCompare: React.FC = () => {
 
         {comparison && (
           <section style={panelStyle}>
-            <h2 style={sectionTitleStyle}>Предпросмотр</h2>
+            <h2 style={sectionTitleStyle}>Preview</h2>
             {previewRows.length === 0 ? (
-              <p style={{ color: '#C9D1D9' }}>В выбранных полях отличий нет.</p>
+              <p style={{ color: '#C9D1D9', margin: 0 }}>No differences found in the selected fields.</p>
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                   <thead>
                     <tr>
-                      {['Статус', 'Ключ', 'Поле', 'Файл 1', 'Файл 2'].map(header => (
+                      {['Status', 'Key', 'Field', 'File 1', 'File 2'].map(header => (
                         <th key={header} style={tableHeaderStyle}>{header}</th>
                       ))}
                     </tr>
@@ -394,8 +451,8 @@ const PcaExportCompare: React.FC = () => {
             )}
           </section>
         )}
-      </div>
-    </main>
+      </header>
+    </div>
   );
 };
 
