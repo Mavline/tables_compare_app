@@ -42,12 +42,13 @@ const fileCardStyle: React.CSSProperties = {
 };
 
 const buttonStyleBase: React.CSSProperties = {
-  padding: '10px 18px',
+  padding: '10px 20px',
   backgroundColor: '#4B3B80',
   color: '#E6EDF3',
   border: 'none',
   borderRadius: '4px',
   cursor: 'pointer',
+  fontSize: '14px',
   fontWeight: 'bold',
 };
 
@@ -128,12 +129,20 @@ const sectionTitleStyle: React.CSSProperties = {
   fontSize: '20px',
 };
 
+const mappedSectionTitleStyle: React.CSSProperties = {
+  color: '#E6EDF3',
+  margin: '0 0 15px',
+  fontSize: '18px',
+  fontWeight: 'bold',
+  textAlign: 'center',
+};
+
 const fieldCardStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '10px',
   padding: '10px 12px',
-  backgroundColor: '#161B22',
+  backgroundColor: '#1C2128',
   borderRadius: '4px',
   minHeight: '42px',
   minWidth: 0,
@@ -339,35 +348,54 @@ const PcaExportCompare: React.FC = () => {
           </div>
         </section>
 
-        <section style={panelStyle}>
-          <h2 style={sectionTitleStyle}>Key Field</h2>
-          <label style={{ display: 'block', marginBottom: '20px' }}>
-            <span style={{ display: 'block', marginBottom: '8px', color: '#E6EDF3' }}>
+        <section className="field-mapping-container" style={{
+          backgroundColor: '#161B22',
+          padding: '20px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          width: '100%',
+          boxSizing: 'border-box',
+        }}>
+          <h3 style={mappedSectionTitleStyle}>Fields to Compare</h3>
+
+          <div style={{ marginBottom: '18px' }}>
+            <label
+              htmlFor="pca-key-field"
+              style={{ display: 'block', marginBottom: '8px', color: '#E6EDF3', textAlign: 'center' }}
+            >
               Select a key field:
-            </span>
-            <select value={keyField} onChange={event => setKeyField(event.target.value)} style={selectStyle}>
+            </label>
+            <select
+              id="pca-key-field"
+              value={keyField}
+              onChange={event => setKeyField(event.target.value)}
+              style={selectStyle}
+            >
               <option value="">Select a column</option>
               {commonHeaders.map(header => (
                 <option key={header} value={header}>{header}</option>
               ))}
             </select>
-          </label>
+          </div>
 
-          <div style={{ marginBottom: '12px' }}>
-            <h2 style={sectionTitleStyle}>Fields to Compare</h2>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '12px', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                style={commonHeaders.length === 0 ? disabledButtonStyle : buttonStyleBase}
-                onClick={selectAllFields}
-                disabled={commonHeaders.length === 0}
-              >
-                Select All Fields
-              </button>
-              <button type="button" style={buttonStyleBase} onClick={clearFields}>
-                Clear Selection
-              </button>
-            </div>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '10px',
+            marginBottom: '18px',
+            flexWrap: 'wrap',
+          }}>
+            <button
+              type="button"
+              style={commonHeaders.length === 0 ? disabledButtonStyle : buttonStyleBase}
+              onClick={selectAllFields}
+              disabled={commonHeaders.length === 0}
+            >
+              Select All Fields
+            </button>
+            <button type="button" style={buttonStyleBase} onClick={clearFields}>
+              Clear Selection
+            </button>
           </div>
 
           <div style={{
@@ -398,9 +426,21 @@ const PcaExportCompare: React.FC = () => {
           </section>
         )}
 
-        <section style={panelStyle}>
-          <h2 style={sectionTitleStyle}>Compare and Download</h2>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <section className="controls-container" style={{
+          width: '100%',
+          backgroundColor: '#1C2128',
+          padding: '20px',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          boxSizing: 'border-box',
+        }}>
+          <div className="button-container" style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '16px',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}>
             <button type="button" style={buttonStyleBase} onClick={runComparison}>
               Compare
             </button>
@@ -412,21 +452,21 @@ const PcaExportCompare: React.FC = () => {
             >
               Download
             </button>
-            {comparison && (
-              <span style={{ color: '#C9D1D9' }}>
-                Rows with differences: {comparison.rows.length}
-              </span>
-            )}
           </div>
+          {comparison && (
+            <div style={{ color: '#C9D1D9', marginTop: '12px', textAlign: 'center' }}>
+              Rows with differences: {comparison.rows.length}
+            </div>
+          )}
         </section>
 
         {comparison && (
-          <section style={panelStyle}>
+          <section style={{ ...panelStyle, textAlign: 'center' }}>
             <h2 style={sectionTitleStyle}>Preview</h2>
             {previewRows.length === 0 ? (
               <p style={{ color: '#C9D1D9', margin: 0 }}>No differences found in the selected fields.</p>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
+              <div style={{ overflowX: 'auto', textAlign: 'left' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
                   <thead>
                     <tr>
