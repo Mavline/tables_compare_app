@@ -12,6 +12,7 @@ import ExcelJS from 'exceljs';
 import { useTableContext } from './context/TableContext';
 import Navigation from './components/Navigation';
 import About from './components/About';
+import PcaExportCompare from './pcaExport/PcaExportCompare';
 
 // Define the GroupInfo type
 interface GroupInfo {
@@ -1370,6 +1371,7 @@ const App: React.FC = () => {
       <Navigation />
       <Routes>
         <Route path="/" element={<MainContent />} />
+        <Route path="/pca-export" element={<PcaExportCompare />} />
         <Route path="/about" element={<About />} />
       </Routes>
     </>
@@ -1377,4 +1379,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-

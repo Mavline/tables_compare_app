@@ -16,6 +16,7 @@ const Navigation: React.FC = () => {
         display: 'flex',
         justifyContent: 'center',
         gap: '20px',
+        flexWrap: 'wrap',
         maxWidth: '1200px',
         margin: '0 auto'
       }}>
@@ -40,6 +41,28 @@ const Navigation: React.FC = () => {
           }}
         >
           MAIN
+        </Link>
+        <Link
+          to="/pca-export"
+          style={{
+            color: '#7E57C2',
+            textDecoration: 'none',
+            fontSize: '18px',
+            fontWeight: 'bold',
+            padding: '5px 15px',
+            borderRadius: '4px',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.backgroundColor = '#1C2128';
+            e.currentTarget.style.color = '#A78BFA';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = '#7E57C2';
+          }}
+        >
+          НОВЫЙ ЗАКАЗЧИК
         </Link>
         <Link 
           to="/about" 
@@ -68,4 +91,4 @@ const Navigation: React.FC = () => {
   );
 };
 
-export default Navigation; 
+export default Navigation;

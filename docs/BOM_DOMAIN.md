@@ -58,6 +58,18 @@ Each file gets exactly one key field. The merge uses it for left-right matching.
 
 Two BOMs may use different key names (`PN` vs `Part Number`); the user selects each independently. There is no automatic detection. The merge filter compares only the *mapped* columns, so a missing key match still surfaces the row.
 
+## PCA Export route
+
+`/pca-export` handles the PCA Export workbook shape separately from the legacy grouped BOM flow. The route expects normal workbook rows below a detected header row, typically on a sheet named `Bill of Materials`, and does not read Excel outline levels.
+
+Domain rules for this route:
+
+- The user still chooses the key field and comparison fields manually.
+- The `#` column is an ordinary column. It may represent order in the source workbook, but the app does not infer hierarchy from it and does not compare it unless selected.
+- The comparison uses the same broad merge principle as `mergeTables`: key maps plus a positional pass, with right-only rows inserted during that pass.
+- Selected field values are compared after range-aware normalization, so `R1-R3` can compare equal to `R1 R2 R3`.
+- Export is flat: `Status`, `Key`, `Field`, left file value, right file value. It does not emit `Level_*`, `LevelValue`, `Canceled_*`, or `Added_*` columns.
+
 ## Description field detection
 
 `findDescriptionField` (App.tsx:520) walks a hardcoded list and returns the first column name whose normalized form contains one of the canonical names. The list:

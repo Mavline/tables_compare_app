@@ -14,6 +14,7 @@ src/index.tsx
             Navigation
             Routes
               "/"       -> <MainContent/>
+              "/pca-export" -> <PcaExportCompare/>
               "/about"  -> <About/>
 ```
 
@@ -41,7 +42,9 @@ Almost all state lives inside `MainContent` (`src/App.tsx`), keyed by file or by
 
 `TableContext` (`src/context/TableContext.tsx`) only holds `mergedData`. It exists so future routes can read the merge without going back to the upload page. The preview table itself reads `mergedPreview`, not the context value.
 
-## Pipeline
+`PcaExportCompare` (`src/pcaExport/PcaExportCompare.tsx`) is intentionally isolated from `MainContent`. It owns its own two upload slots, parsed PCA rows, manually selected key field, manually selected comparison fields, preview rows, and export action. It does not read or mutate `TableContext`, `fieldMappings`, `groupingStructure`, or the legacy RefDes selector state.
+
+## MainContent pipeline
 
 ### 1. Upload (`handleFileUpload`)
 
@@ -129,6 +132,41 @@ For each comma-separated part of the cell:
 - Writes the workbook with `ExcelJS`, cyan headers (`#B1F0F0`), bold size 8.43, thin borders.
 - Saves as `merged_tables.xlsx` via `file-saver`.
 
+## PCA Export pipeline (`/pca-export`)
+
+This route is a separate workflow for the PCA Export workbook shape and does not change the legacy `/` pipeline.
+
+### 1. Parse (`parsePcaWorkbook`)
+
+- Reads the workbook with SheetJS.
+- Prefers the `Bill of Materials` sheet when present, otherwise falls back to the first sheet.
+- Scans the first 50 rows and uses the most text-heavy row as the header row, which handles the PCA title row above the column headers.
+- Deduplicates blank or repeated headers and parses all data rows below the detected header.
+
+### 2. Manual selection
+
+- The user chooses one key field from the common headers of both files.
+- The user chooses which common fields to compare.
+- The `#` column is not special-cased. It is compared only if the user selects it.
+- No outline or hierarchy columns are produced for this route.
+
+### 3. Compare (`comparePcaRows`)
+
+- Builds left and right key maps.
+- Iterates by position from `0` to `max(left.length, right.length) - 1`, matching left rows by key against the right map and inserting right-only rows during the same positional pass.
+- Filters out rows where every selected field is equal after range-aware normalization.
+- Preserves the visible statuses `changed`, `added`, and `removed`.
+
+### 4. Range-aware value normalization
+
+`normalizeRangeAwareValue` expands tokens such as `R1-R3` and `1-3` before comparing selected field values. Mixed-prefix ranges such as `R1-C3` pass through unchanged.
+
+### 5. Export (`createPcaExportWorkbook`)
+
+- Writes a flat `PCA Comparison` workbook with one row per changed selected field.
+- Uses `Status`, `Key`, `Field`, and the two source file names as headers.
+- Uses the same cyan header fill and thin borders expected from the existing Excel outputs.
+
 ## File layout
 
 ```
@@ -140,7 +178,7 @@ src/
 ├── context/
 │   └── TableContext.tsx      # mergedData provider
 ├── components/
-│   ├── Navigation.tsx        # fixed top bar with two links
+│   ├── Navigation.tsx        # fixed top bar with main, PCA export, and about links
 │   ├── About.tsx             # static page
 │   └── ui/                   # primitive wrappers (Radix labels, Tailwind-ish classes)
 │       ├── alert.tsx
@@ -149,8 +187,12 @@ src/
 │       ├── input.tsx
 │       ├── label.tsx
 │       └── select.tsx
-└── lib/
-    └── utils.ts              # cn() helper using clsx + tailwind-merge
+├── lib/
+│   └── utils.ts              # cn() helper using clsx + tailwind-merge
+└── pcaExport/
+    ├── PcaExportCompare.tsx  # isolated PCA Export route UI
+    ├── pcaExportLogic.ts     # PCA parser, comparator, range normalization, export
+    └── pcaExportLogic.test.ts
 ```
 
 The CSS in `App.css` is largely overridden by inline styles in `App.tsx`. The Tailwind classes in JSX (`text-3xl`, `font-bold`, `mb-6`) are noise unless Tailwind is added to the build — they currently render as plain text class names with no styles.
