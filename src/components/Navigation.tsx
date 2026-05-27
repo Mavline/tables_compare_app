@@ -15,7 +15,7 @@ const Navigation: React.FC = () => {
       <div style={{
         display: 'flex',
         justifyContent: 'center',
-        gap: '20px',
+        gap: '8px',
         flexWrap: 'wrap',
         maxWidth: '1200px',
         margin: '0 auto'
@@ -25,9 +25,9 @@ const Navigation: React.FC = () => {
           style={{
             color: '#7E57C2',
             textDecoration: 'none',
-            fontSize: '18px',
+            fontSize: '16px',
             fontWeight: 'bold',
-            padding: '5px 15px',
+            padding: '5px 12px',
             borderRadius: '4px',
             transition: 'all 0.3s ease'
           }}
@@ -47,9 +47,9 @@ const Navigation: React.FC = () => {
           style={{
             color: '#7E57C2',
             textDecoration: 'none',
-            fontSize: '18px',
+            fontSize: '16px',
             fontWeight: 'bold',
-            padding: '5px 15px',
+            padding: '5px 12px',
             borderRadius: '4px',
             transition: 'all 0.3s ease'
           }}
@@ -69,9 +69,9 @@ const Navigation: React.FC = () => {
           style={{
             color: '#7E57C2',
             textDecoration: 'none',
-            fontSize: '18px',
+            fontSize: '16px',
             fontWeight: 'bold',
-            padding: '5px 15px',
+            padding: '5px 12px',
             borderRadius: '4px',
             transition: 'all 0.3s ease'
           }}
