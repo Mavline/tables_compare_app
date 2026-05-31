@@ -1,134 +1,59 @@
-# BOM Comparison Tool
+# BOM / Excel Table Comparison Tool
 
-## Expert Overview
-As a recognized expert in BOM (Bill of Materials) systems and recipient of the IPC Apex Award for advanced documentation verification methods in the electronics industry, I present this specialized tool for Order Management Engineers.
+## What this project demonstrates
 
-The BOM Comparison Tool is an advanced web application that revolutionizes the way Order Management Engineers handle BOM modifications. When customers submit order changes, this tool provides a sophisticated yet user-friendly interface for comparing original and revised BOMs, ensuring precise tracking of all modifications while maintaining the integrity of hierarchical structures and component relationships.
+This project demonstrates a React and TypeScript application for comparing original and revised Excel-based BOM or operational tables. It helps review added, removed, and changed rows, map key fields, inspect workbook structure, and prepare comparison output before operational updates are accepted.
 
-## Core Functionality
-The tool addresses critical challenges in BOM comparison:
-- **Hierarchical Integrity**: Preserves Excel outline levels and grouping structures
-- **Reference Designator Intelligence**: Advanced parsing and comparison of component designators
-- **Change Detection Algorithm**: Sophisticated matching system for identifying modifications
-- **Production-Ready Output**: Generates standardized, industry-compliant comparison reports
+The project is useful as proof of work for spreadsheet workflow automation, operational change tracking, and internal tools for engineering, procurement, production, and order-management processes.
 
-## Technology Foundation
-- **Frontend Architecture**: React 18+ with TypeScript for robust type safety
-- **State Management**: React Context API for efficient data flow
-- **Routing System**: React Router for seamless navigation
-- **Excel Processing Engine**: 
-  - XLSX for high-performance file reading
-  - ExcelJS for professional-grade output generation
-  - JSZip for advanced Excel structure handling
-- **XML Analysis**: fast-xml-parser for deep Excel structure examination
-- **File Management**: file-saver for reliable output handling
+## Use case
 
-## Professional Features
-1. **Advanced BOM Processing**
-   - Industry-standard Excel format support (.xlsx, .xls)
-   - Multi-sheet analysis capabilities
-   - Preservation of complex BOM hierarchies
-   - Intelligent structure recognition
+A team receives a revised Excel file and needs to compare it with an earlier version before updating a business process, order, BOM, or report. The application gives users a browser-based workflow for loading files, selecting sheets, mapping fields, comparing rows, preserving useful structure, and exporting a reviewable result.
 
-2. **Comprehensive Change Detection**
-   - Component addition identification
-   - Removal tracking
-   - Specification modification analysis
-   - Reference designator verification
+## Features
 
-3. **Reference Designator Analysis**
-   - Automated range expansion
-   - Component designation verification
-   - Dual-column processing capability
-   - Hierarchical relationship preservation
+- Upload and compare Excel files.
+- Select workbook sheets for comparison.
+- Configure key fields and field mappings.
+- Detect changed, added, and removed rows.
+- Inspect workbook structure and grouping metadata.
+- Generate comparison output for review.
+- Export results from the browser.
 
-4. **Enterprise-Grade Comparison**
-   - Key field-based row matching
-   - Intelligent field correlation
-   - Complex BOM structure support
-   - Group hierarchy maintenance
+## Technical stack
 
-5. **Professional Reporting**
-   - Industry-standard comparison reports
-   - Production-ready Excel output
-   - Clear change visualization
-   - Enterprise-scale data handling
+- Frontend: React and TypeScript.
+- Spreadsheet parsing: xlsx and ExcelJS.
+- Workbook structure handling: JSZip and fast-xml-parser.
+- File export: file-saver.
+- Routing/UI: React Router and local React components.
 
-## Implementation Process
-1. Initial BOM Upload (Original Version)
-2. Modified BOM Integration
-3. Sheet Analysis and Selection
-4. Field Mapping Configuration
-5. Key Field Specification
-6. Comparison Processing
-7. Result Verification
-8. Report Generation
+## Architecture
 
-## Technical Capabilities
-- **Structure Analysis**: Maintains complex BOM hierarchies
-- **Component Matching**: Advanced algorithms for precise comparison
-- **Change Tracking**: Comprehensive modification detection
-- **Designator Processing**: Sophisticated reference handling
-- **Result Filtering**: Intelligent change isolation
+The application runs as a browser-based React app. Users upload Excel files, the app parses workbook sheets and row data, selected fields are mapped for comparison, and the comparison result is held in application state before export. XML and ZIP-level workbook parsing is used where workbook structure matters.
 
-## Output Specifications
-The system generates professional-grade reports including:
-- Complete specification comparisons
-- Industry-standard change highlighting
-- Component modification tracking
-- Expanded designator analysis
-- Preserved hierarchical structures
-- Production-ready formatting
+## How to run locally
 
-## System Requirements
+Prerequisites:
 
-### Technical Prerequisites
-- Node.js 14.0+
-- npm/yarn package manager
-- Modern web browser with JavaScript enabled
+- Node.js.
+- npm.
 
-### Installation Protocol
-1. Repository cloning:
-```bash
-git clone [repository-url]
-```
+Commands:
 
-2. Dependency installation:
 ```bash
 npm install
-```
-
-3. Development server initiation:
-```bash
 npm start
 ```
 
-Access point: http://localhost:3000
+Build:
 
-## Operational Protocol
-1. Original BOM file integration
-2. Modified BOM file upload
-3. Sheet selection and verification
-4. Comparison field specification
-5. Key field mapping
-6. Process execution
-7. Result validation
-8. Report extraction
+```bash
+npm run build
+```
 
-## Performance Metrics
-- Large-scale BOM processing capability
-- Optimized designator analysis
-- Hierarchical structure management
-- Memory utilization optimization
+## Portfolio notes
 
-## Quality Assurance
-- Format validation protocols
-- Key field verification systems
-- Error reporting mechanisms
-- Operational safety controls
+This README intentionally avoids unsupported authority claims. This repository is a portfolio/proof-of-work project. It does not include private client data, production credentials, internal datasets, or confidential business logic.
 
-## Collaboration
-Professional contributions are welcomed through Pull Requests.
-
-## Licensing
-This enterprise solution is licensed under the MIT License - refer to LICENSE for details.
+Related acty.dev proof page: `/examples/bom-excel-comparison/`.
